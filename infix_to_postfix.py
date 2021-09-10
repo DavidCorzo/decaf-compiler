@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from string import ascii_lowercase, ascii_uppercase
+from copy import deepcopy
 
 DEBUG = True
 
@@ -14,10 +15,8 @@ class dictlist(dict):
         except AttributeError: # If it fails because it is not a list
             super(dictlist, self).__setitem__(key, [self[key], value])
 
+@dataclass(repr=True, init=True)
 class state:
-    # label: str = "None"
-    # edges: dict[str : ['state']] = None # { 'a': [state1, state2, etc] }
-
     def __init__(self, label:str):
         self.label = label
         self.edges = dictlist()
@@ -151,8 +150,8 @@ class NFAGenerator():
         start_state.edges[None] = nfa2.start_state
         final_state = state(next(self.label_gen))
         # adding epsilons from the old ending states to the new end state.
-        nfa2.start_state.edges[None] = final_state
-        nfa1.start_state.edges[None] = final_state
+        nfa2.final_state.edges[None] = final_state
+        nfa1.final_state.edges[None] = final_state
         # constructing the new nfa representing or construction.
         or_nfa = epsilon_nfa(start_state, final_state)
         # pushing the merged or nfa to the stack frame.
@@ -168,9 +167,19 @@ class NFAGenerator():
             start_state.edges.update({None : final_state})
         character_nfa = epsilon_nfa(start_state, final_state)
         self.nfa_stack_frames.append(character_nfa)
-        
+        print(character_nfa)
+        print("-"*100)
+
     def regex_plus(self):
-        pass
+        # (nfa1)+ -> (nfa1)·(nfa1)*
+        # copy all the pointers and the data pointed to of nfa1.
+        nfa1: epsilon_nfa = deepcopy(self.nfa_stack_frames[-1]) 
+        # creates new stack frame of (nfa1)
+        self.nfa_stack_frames.append(nfa1)
+        # applies kleene to the top of the stack but we have made a copy (nfa1)*
+        self.regex_kleene() 
+        # applies concatenation to nfa1 to create nfa1·nfa1* into a single nfa.
+        self.regex_concatenation() # merges the (nfa1)·(nfa2)* into a single nfa
     
     def regex_concatenation(self):
         # CONCATENATION/UNION EXPRESSION 
@@ -186,8 +195,19 @@ class NFAGenerator():
         self.regex_character('ε')
         self.regex_or()
         
-    def regex_kleene(self, char):
-        pass
+    def regex_kleene(self):
+        nfa1: epsilon_nfa = self.nfa_stack_frames.pop()
+        # start and final states for the new nfa
+        start_state = state(next(self.label_gen))
+        final_state = state(next(self.label_gen))
+        # adding epsilon to the start of the nfa already constructed.
+        start_state.edges[None] = nfa1.start_state
+        # adding epsilon to the final state in the case of just epsilon.
+        start_state.edges[None] = final_state
+        # adding an edge for repetition to the begining of the already constructed nfa.
+        nfa1.final_state.edges[None] = nfa1.start_state
+        # adding to the final state of the constructed nfa an edge to the new final state
+        nfa1.final_state.edges[None] = final_state
 
     def thompson_construction(self):
         """ This turns the regex into epsilon nfa, epsilon will be represented by 'None' """
@@ -199,7 +219,7 @@ class NFAGenerator():
             elif (char == '+'):
                 self.regex_plus()
             elif (char == '*'):
-                self.regex_kleene(char)
+                self.regex_kleene()
             elif (char == '·'):
                 self.regex_concatenation()
             elif (char == '|'):
@@ -211,5 +231,5 @@ class NFAGenerator():
     
 
 # (-|ε)·(0|1|2|3|4|5|6|7|8|9)+·(.·(0|1|2|3|4|5|6|7|8|9))?
-nfa = NFAGenerator("(0|1|2|3|4|5|6|7|8|9)")
+nfa = NFAGenerator("")
 nfa.thompson_construction()
