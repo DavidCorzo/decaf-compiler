@@ -33,6 +33,7 @@ class state:
 class epsilon_nfa():
     start_state   : state = None
     final_state   : state = None
+    last_op       : str   = None
 
     def __repr__(self) -> str:
         return f"nfa: {self.start_state}"
@@ -44,6 +45,7 @@ class NFAGenerator():
         self.postfix = self.infix_to_postfix()
         self.nfa_stack_frames = [] # list[epsilon_nfa]
         self.label_gen = self.label_maker()
+        self.last_op_stack = []
 
 
     def infix_to_postfix(self) -> str:
@@ -138,50 +140,71 @@ class NFAGenerator():
             yield num
             num += 1    
     
-    def regex_or(self):
+    def regex_or(self, char, push_to_op_stack=True):
         # OR a|b
         # pop the last two nfas.
+        if ( len(self.last_op_stack) >= 2 ):
+            if ( (self.last_op_stack[-2] == '|') and (self.last_op_stack[-1] == 'c') ): # the last operation was an or then it is a chained or.
+                character_nfa: epsilon_nfa = self.nfa_stack_frames.pop() # pop the character nfa
+                or_nfa: epsilon_nfa        = self.nfa_stack_frames.pop() # pop the or nfa
+                or_nfa.start_state.edges[None] = character_nfa.start_state
+                character_nfa.final_state.edges[None] = or_nfa.final_state
+                self.nfa_stack_frames.append(or_nfa)
+                if (push_to_op_stack): self.last_op_stack.append('|') 
+                return
+        # If it is not a chained or operation then create or nfa as regularly
         nfa2: epsilon_nfa = self.nfa_stack_frames.pop()
         nfa1: epsilon_nfa = self.nfa_stack_frames.pop()
         # create a new initial and final state
-        start_state   = state(next(self.label_gen))
-        # adding epsilons from the new accepting state to the new accepting state.
-        start_state.edges[None] = nfa1.start_state
-        start_state.edges[None] = nfa2.start_state
+        start_state = state(next(self.label_gen))
         final_state = state(next(self.label_gen))
+        # adding epsilons from the new accepting state to the new accepting state.
+        start_state.edges[None] = nfa1.start_state # (A) -epsilon-> (character nfa 1)
+        start_state.edges[None] = nfa2.start_state # (A) -epsilon-> (character nfa 2)
         # adding epsilons from the old ending states to the new end state.
-        nfa2.final_state.edges[None] = final_state
-        nfa1.final_state.edges[None] = final_state
-        # constructing the new nfa representing or construction.
+        nfa1.final_state.edges[None] = final_state # (character nfa 1) -epsilon-> (B)
+        nfa2.final_state.edges[None] = final_state # (character nfa 2) -epsilon-> (B)
+        # constructing the new nfa representing the 'or' construction.
         or_nfa = epsilon_nfa(start_state, final_state)
+        # registering that the nfa is of type 'or'
+        or_nfa.last_op = '|'
         # pushing the merged or nfa to the stack frame.
         self.nfa_stack_frames.append(or_nfa)
+        # add last op
+        if (push_to_op_stack): self.last_op_stack.append('|')
         
-    def regex_character(self, char):
+    def regex_character(self, char, push_to_op_stack=True):
         # CHARACTER state(A) -char-> state(B)
-        start_state   = state(next(self.label_gen)) # adding initial state
+        start_state = state(next(self.label_gen)) # adding initial state
         final_state = state(next(self.label_gen)) # adding ending state
         if (char != "ε"): # adding edge -char->
             start_state.edges.update({char : final_state}) 
         else: 
             start_state.edges.update({None : final_state})
+        # creating character nfa to push to the nfa stack.
         character_nfa = epsilon_nfa(start_state, final_state)
+        # pushing character nfa to the nfa stack.
         self.nfa_stack_frames.append(character_nfa)
+        # appending the operation to the char stack
+        if (push_to_op_stack):
+            self.last_op_stack.append('c')
         print(character_nfa)
         print("-"*100)
 
-    def regex_plus(self):
+    def regex_plus(self, push_to_op_stack=True):
         # (nfa1)+ -> (nfa1)·(nfa1)*
         # copy all the pointers and the data pointed to of nfa1.
         nfa1: epsilon_nfa = deepcopy(self.nfa_stack_frames[-1]) 
         # creates new stack frame of (nfa1)
         self.nfa_stack_frames.append(nfa1)
         # applies kleene to the top of the stack but we have made a copy (nfa1)*
-        self.regex_kleene() 
+        self.regex_kleene()
         # applies concatenation to nfa1 to create nfa1·nfa1* into a single nfa.
         self.regex_concatenation() # merges the (nfa1)·(nfa2)* into a single nfa
+        if (push_to_op_stack):
+            self.last_op_stack.append('+')
     
-    def regex_concatenation(self):
+    def regex_concatenation(self, push_to_op_stack=True):
         # CONCATENATION/UNION EXPRESSION 
         nfa2: epsilon_nfa = self.nfa_stack_frames.pop()
         nfa1: epsilon_nfa = self.nfa_stack_frames.pop()
@@ -190,12 +213,15 @@ class NFAGenerator():
         concatenation_nfa = epsilon_nfa(nfa1.start_state, nfa2.final_state)
         # adding the new nfa of the concatenated string.
         self.nfa_stack_frames.append(concatenation_nfa)
+        if (push_to_op_stack):
+            self.last_op_stack.append('·')
         
-    def regex_question_mark(self):
-        self.regex_character('ε')
-        self.regex_or()
+    def regex_question_mark(self, push_to_op_stack=True):
+
+        pass
         
-    def regex_kleene(self):
+        
+    def regex_kleene(self, push_to_op_stack=True):
         nfa1: epsilon_nfa = self.nfa_stack_frames.pop()
         # start and final states for the new nfa
         start_state = state(next(self.label_gen))
@@ -208,22 +234,25 @@ class NFAGenerator():
         nfa1.final_state.edges[None] = nfa1.start_state
         # adding to the final state of the constructed nfa an edge to the new final state
         nfa1.final_state.edges[None] = final_state
+        if (push_to_op_stack):
+            self.last_op_stack.append('*')
 
     def thompson_construction(self):
         """ This turns the regex into epsilon nfa, epsilon will be represented by 'None' """
         print(self.postfix)
+        
         for char in self.postfix:
             # The sight of an operator means we already have at least one nfa stack frame
             if (char == '?'):
                 self.regex_question_mark()
             elif (char == '+'):
-                self.regex_plus()
+                pass
             elif (char == '*'):
-                self.regex_kleene()
+                pass
             elif (char == '·'):
-                self.regex_concatenation()
+                pass
             elif (char == '|'):
-                self.regex_or()
+                self.regex_or(char)
             else:
                 self.regex_character(char)
         print(self.nfa_stack_frames[0])
@@ -231,5 +260,6 @@ class NFAGenerator():
     
 
 # (-|ε)·(0|1|2|3|4|5|6|7|8|9)+·(.·(0|1|2|3|4|5|6|7|8|9))?
-nfa = NFAGenerator("")
+nfa = NFAGenerator("([0-5])")
+# print(nfa.infix_to_postfix())
 nfa.thompson_construction()
