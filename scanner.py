@@ -1,9 +1,17 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from string import ascii_lowercase, ascii_uppercase
-from copy import deepcopy
+from copy import deepcopy, copy
+
+
+def label_maker():
+    num = 0
+    while True:
+        yield num
+        num += 1    
 
 DEBUG = True
+label_gen = label_maker()
 
 class dictlist(dict):
     def __setitem__(self, key, value):
@@ -17,23 +25,26 @@ class dictlist(dict):
 
 @dataclass(repr=True, init=True)
 class state:
-    def __init__(self, label:str):
-        self.label = label
-        self.edges = dictlist()
+    def __init__(self, label = None):
+        if (label == None): self.label = next(label_gen)
+        else: self.label = label
+        self.edges:dictlist = dictlist()
+
+    def __str__(self) -> str:
+        return f"state={self.label} {self.edges}" 
 
     def __repr__(self) -> str:
-        s = f"state={self.label} {self.edges}" 
-        # for char, states in self.edges.items():
-        #     for s in states:
-        #         s += f"\tedge=({self.label})-{char}->({s.label})\n"
-        return s
+        return f"state={self.label} {self.edges}" 
             
 
-@dataclass(repr=True)
+@dataclass(repr=True, init=True)
 class epsilon_nfa():
     start_state   : state = None
     final_state   : state = None
     last_op       : str   = None
+
+    def __str__(self) -> str:
+        return f"nfa: {self.start_state}"
 
     def __repr__(self) -> str:
         return f"nfa: {self.start_state}"
@@ -44,9 +55,13 @@ class NFAGenerator():
         self.infix = infix
         self.postfix = self.infix_to_postfix()
         self.nfa_stack_frames = [] # list[epsilon_nfa]
-        self.label_gen = self.label_maker()
         self.last_op_stack = []
+        # file report
+        self.file = open("report.txt", mode="a")
+        self.file.truncate(0)
 
+    def __del__(self):
+        self.file.close()
 
     def infix_to_postfix(self) -> str:
         """ 
@@ -133,14 +148,8 @@ class NFAGenerator():
             self.postfix += stack.pop()
         ########################## POSTFIX STRING GENERATION #########################################
         return self.postfix
-        
-    def label_maker(self):
-        num = 0
-        while True:
-            yield num
-            num += 1    
     
-    def regex_or(self, char, push_to_op_stack=True):
+    def regex_or(self, push_to_op_stack=True):
         # OR a|b
         # pop the last two nfas.
         if ( len(self.last_op_stack) >= 2 ):
@@ -156,8 +165,8 @@ class NFAGenerator():
         nfa2: epsilon_nfa = self.nfa_stack_frames.pop()
         nfa1: epsilon_nfa = self.nfa_stack_frames.pop()
         # create a new initial and final state
-        start_state = state(next(self.label_gen))
-        final_state = state(next(self.label_gen))
+        start_state = state()
+        final_state = state()
         # adding epsilons from the new accepting state to the new accepting state.
         start_state.edges[None] = nfa1.start_state # (A) -epsilon-> (character nfa 1)
         start_state.edges[None] = nfa2.start_state # (A) -epsilon-> (character nfa 2)
@@ -175,9 +184,9 @@ class NFAGenerator():
         
     def regex_character(self, char, push_to_op_stack=True):
         # CHARACTER state(A) -char-> state(B)
-        start_state = state(next(self.label_gen)) # adding initial state
-        final_state = state(next(self.label_gen)) # adding ending state
-        if (char != "ε"): # adding edge -char->
+        start_state = state() # adding initial state
+        final_state = state() # adding ending state
+        if (char != 'ε'): # adding edge -char->
             start_state.edges.update({char : final_state}) 
         else: 
             start_state.edges.update({None : final_state})
@@ -188,78 +197,91 @@ class NFAGenerator():
         # appending the operation to the char stack
         if (push_to_op_stack):
             self.last_op_stack.append('c')
-        print(character_nfa)
-        print("-"*100)
+        # print(character_nfa)
+        # print("-"*100)
 
-    def regex_plus(self, push_to_op_stack=True):
-        # (nfa1)+ -> (nfa1)·(nfa1)*
-        # copy all the pointers and the data pointed to of nfa1.
-        nfa1: epsilon_nfa = deepcopy(self.nfa_stack_frames[-1]) 
-        # creates new stack frame of (nfa1)
-        self.nfa_stack_frames.append(nfa1)
-        # applies kleene to the top of the stack but we have made a copy (nfa1)*
-        self.regex_kleene()
-        # applies concatenation to nfa1 to create nfa1·nfa1* into a single nfa.
-        self.regex_concatenation() # merges the (nfa1)·(nfa2)* into a single nfa
-        if (push_to_op_stack):
-            self.last_op_stack.append('+')
+    # def regex_plus(self, push_to_op_stack=True):
+    #     # (nfa1)+ -> (nfa1)·(nfa1)*
+    #     # copy all the pointers and the data pointed to of nfa1.
+    #     nfa1: epsilon_nfa = deepcopy(self.nfa_stack_frames[-1])
+    #     # creates new stack frame of (nfa1)
+    #     self.nfa_stack_frames.append(nfa1)
+    #     # print("copy??")
+    #     print(self.nfa_stack_frames[-2])
+    #     print(self.nfa_stack_frames[-1])
+    #     exit(-1)
+    #     # applies kleene to the top of the stack but we have made a copy (nfa1)* without registering it as a kleene operation.
+    #     self.regex_kleene(False)
+    #     # applies concatenation to nfa1 to create nfa1·nfa1* into a single nfa. Without registeriing it as a concatenation operation.
+    #     self.regex_concatenation(False) # merges the (nfa1)·(nfa2)* into a single nfa
+    #     if (push_to_op_stack): self.last_op_stack.append('+')
     
     def regex_concatenation(self, push_to_op_stack=True):
         # CONCATENATION/UNION EXPRESSION 
         nfa2: epsilon_nfa = self.nfa_stack_frames.pop()
         nfa1: epsilon_nfa = self.nfa_stack_frames.pop()
         # the accepting state of the first nfa will be the starting state of the second nfa
-        nfa1.final_state = nfa2.start_state
+        nfa1.final_state.edges[None] = nfa2.start_state
         concatenation_nfa = epsilon_nfa(nfa1.start_state, nfa2.final_state)
         # adding the new nfa of the concatenated string.
         self.nfa_stack_frames.append(concatenation_nfa)
-        if (push_to_op_stack):
-            self.last_op_stack.append('·')
+        if (push_to_op_stack): self.last_op_stack.append('·')
         
-    def regex_question_mark(self, push_to_op_stack=True):
-
-        pass
-        
+    def regex_question_mark(self, char, push_to_op_stack=True):
+        self.regex_character('ε', False) # create epsilon constrution without registering it as a char operation.
+        # the character nfa is already the [-2] in the stack, the [-1] is epsilon.
+        self.regex_or(False) # Create an or construction without registering it as a or operation.
+        if (push_to_op_stack): self.last_op_stack.append('?')
         
     def regex_kleene(self, push_to_op_stack=True):
+        # poping the previous nfa that we are going to do (nfa)*
         nfa1: epsilon_nfa = self.nfa_stack_frames.pop()
         # start and final states for the new nfa
-        start_state = state(next(self.label_gen))
-        final_state = state(next(self.label_gen))
-        # adding epsilon to the start of the nfa already constructed.
+        start_state = state()
+        final_state = state()
+        # adding epsilon to the start of nfa1
         start_state.edges[None] = nfa1.start_state
-        # adding epsilon to the final state in the case of just epsilon.
+        # adding epsilon to the final state in the case of just epsilon. 
         start_state.edges[None] = final_state
         # adding an edge for repetition to the begining of the already constructed nfa.
         nfa1.final_state.edges[None] = nfa1.start_state
         # adding to the final state of the constructed nfa an edge to the new final state
         nfa1.final_state.edges[None] = final_state
-        if (push_to_op_stack):
-            self.last_op_stack.append('*')
+        # creating the kleene star nfa 
+        kleene_nfa: epsilon_nfa = epsilon_nfa(start_state, final_state)
+        # push to the stack frames.
+        self.nfa_stack_frames.append(kleene_nfa)
+        if (push_to_op_stack): self.last_op_stack.append('*')
 
     def thompson_construction(self):
         """ This turns the regex into epsilon nfa, epsilon will be represented by 'None' """
-        print(self.postfix)
-        
+        self.file.write(self.postfix + '\n')
+        index = 0
         for char in self.postfix:
             # The sight of an operator means we already have at least one nfa stack frame
             if (char == '?'):
-                self.regex_question_mark()
-            elif (char == '+'):
-                pass
+                self.regex_question_mark(char)
+            # elif (char == '+'):
+            #     self.regex_plus()
             elif (char == '*'):
-                pass
+                self.regex_kleene()
             elif (char == '·'):
-                pass
+                self.regex_concatenation()
             elif (char == '|'):
                 self.regex_or(char)
             else:
                 self.regex_character(char)
-        print(self.nfa_stack_frames[0])
+            for i in self.nfa_stack_frames:
+                self.file.write(f"{i}\n")
+            self.file.write(f"index: {index} {char}"+"-"*100+'\n')
+            index += 1
+        
+        self.file.write(f"{self.nfa_stack_frames[0]}\n")
+        print(len(self.nfa_stack_frames), char)
 
     
 
-# (-|ε)·(0|1|2|3|4|5|6|7|8|9)+·(.·(0|1|2|3|4|5|6|7|8|9))?
-nfa = NFAGenerator("([0-5])")
+# 
+nfa = NFAGenerator("-?·[0-9][0-9]*·(.·[0-9])?")
 # print(nfa.infix_to_postfix())
 nfa.thompson_construction()
