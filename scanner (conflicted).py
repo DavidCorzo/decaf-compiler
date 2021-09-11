@@ -255,7 +255,8 @@ class NFAGenerator():
 
     def thompson_construction(self):
         """ This turns the regex into epsilon nfa, epsilon will be represented by 'None' """
-        if DEBUG: self.file.write(self.postfix + '\n')
+        self.file.write(self.postfix + '\n')
+        print(self.postfix)
         index = 0
         for char in self.postfix:
             # The sight of an operator means we already have at least one nfa stack frame
@@ -270,12 +271,11 @@ class NFAGenerator():
             else:
                 self.regex_character(char)
             # print(char)
-            if DEBUG:
-                for i in self.nfa_stack_frames:
-                    self.file.write(f"{i}\n")
-                self.file.write(f"index: {index} {char} "+"-"*100+'\n')
-                index += 1
-        if DEBUG: self.file.write(f"{self.nfa_stack_frames}\n")
+            # for i in self.nfa_stack_frames:
+            #     self.file.write(f"{i}\n")
+            # self.file.write(f"index: {index} {char} "+"-"*100+'\n')
+            # index += 1
+        self.file.write(f"{self.nfa_stack_frames}\n")
 
 
 nfa = NFAGenerator("-?·[0-9]·[0-9]*·(.·[0-9])?")
