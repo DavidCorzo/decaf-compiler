@@ -2,6 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from string import ascii_lowercase, ascii_uppercase
 from copy import deepcopy, copy
+from typing import Iterable
+import argparse
 
 
 def label_maker():
@@ -12,30 +14,64 @@ def label_maker():
 
 DEBUG = True
 label_gen = label_maker()
+ALL_STATES = dict()
+DIGITS = "0123456789"
+SIGMA = ascii_lowercase + ascii_uppercase + DIGITS + "()+-*<>/%=!\"'}{"
 
 class dictlist(dict):
     def __setitem__(self, key, value):
         try:
-            # Assumes there is a list on the key
-            self[key].append(value)
-        except KeyError: # If it fails, because there is no key
-            super(dictlist, self).__setitem__(key, value)
-        except AttributeError: # If it fails because it is not a list
-            super(dictlist, self).__setitem__(key, [self[key], value])
+            if (self.get(None) == None):
+                self.update({key: [value]})
+            else: 
+                self[key].append(value)
+        except: 
+            print(f"key={key}, value={value} got an error")
+        # try:
+        #     # Assumes there is a list on the key
+        #     self[key].append(value)
+        # except KeyError: # If it fails, because there is no key
+        #     super(dictlist, self).__setitem__(key, value)
+        # except AttributeError: # If it fails because it is not a list
+        #     super(dictlist, self).__setitem__(key, [self[key], value])
+
+def command_line_interpreter() -> dict:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--o', help="rename file with -o")
+    parser.add_argument('--target', help="-target <stage>", choices=["scan", "parse", "ast", "irt", "codegen"])
+    parser.add_argument('--debug', help="-debug <stage>")
+    args = parser.parse_args()
+    return args.__dict__
 
 @dataclass(repr=True, init=True)
 class state:
     def __init__(self, label = None):
         if (label == None): self.label = next(label_gen)
         else: self.label = label
-        self.edges:dictlist = dictlist()
+        self.edges:dictlist = dictlist() 
+        ALL_STATES.update({self.label : self})
+    
+    def __del__(self):
+        # print(ALL_STATES)
+        try:
+            del ALL_STATES[self.label]
+            del self
+        except:
+            # means that it has already been deleted
+            # print(self.label)
+            # print(ALL_STATES)
+            pass
 
     def __str__(self) -> str:
-        return f"state={self.label} {self.edges}" 
-
+        return f"state={self.label} edges={self.edges}" # {self.edges}
     def __repr__(self) -> str:
-        return f"state={self.label} {self.edges}" 
-            
+        return f"state={self.label} edges={self.edges}" # {self.edges}
+    
+    # def __str__(self) -> str:
+    #     return f"state={self.label} edges={list(self.edges.keys())}" # {self.edges}
+    # def __repr__(self) -> str:
+    #     return f"state={self.label} edges={list(self.edges.keys())}" # {self.edges}
+    
 
 @dataclass(repr=True, init=True)
 class epsilon_nfa():
@@ -43,25 +79,34 @@ class epsilon_nfa():
     final_state   : state = None
     last_op       : str   = None
 
+    # def __str__(self) -> str:
+    #     return f"start:{self.start_state.label} end:{self.final_state.label}\nnfa: {self.start_state}"
+
+    # def __repr__(self) -> str:
+    #     return f"start:{self.start_state.label} end:{self.final_state.label}\nnfa: {self.start_state}"
+
     def __str__(self) -> str:
-        return f"start:{self.start_state.label} end:{self.final_state.label}\nnfa: {self.start_state}"
-
+        return f"nfa: {self.start_state}"
+    
     def __repr__(self) -> str:
-        return f"start:{self.start_state.label} end:{self.final_state.label}\nnfa: {self.start_state}"
+        return f"nfa: {self.start_state}"
 
-class NFAGenerator():
-    DIGITS = "0123456789"
+class NFAtoDFAGenerator():
     def __init__(self, infix:str):
-        self.infix = infix
-        self.postfix = self.infix_to_postfix()
-        self.nfa_stack_frames = [] # list[epsilon_nfa]
-        self.last_op_stack = []
-        # file report
-        self.file = open("report.txt", mode="a")
-        self.file.truncate(0)
+        self.infix              :str                    = infix
+        self.postfix            :str                    = self.infix_to_postfix()
+        self.nfa_stack_frames   :Iterable[epsilon_nfa]  = [] 
+        self.last_op_stack      :Iterable[epsilon_nfa]  = []
+        self.finished_nfa       :epsilon_nfa            = None
+        # file report and error log.
+        self.debug_info = open("report.txt", mode="a")
+        self.debug_info.truncate(0)
+        self.error_log = open("error.log", mode="a")
+        self.error_log.truncate(0)
 
     def __del__(self):
-        self.file.close()
+        self.debug_info.close()
+        self.error_log.close()
 
     def infix_to_postfix(self) -> str:
         """ 
@@ -105,7 +150,7 @@ class NFAGenerator():
                         char_inside = char_inside[:-2]
                         low_lim = self.infix[i-1]
                         high_lim = self.infix[i+1]
-                        if ((low_lim in self.DIGITS) and (high_lim in self.DIGITS)):
+                        if ((low_lim in DIGITS) and (high_lim in DIGITS)):
                             for r in range(int(low_lim), int(high_lim) + 1):
                                 char_inside += str(r)
                         elif ((low_lim in ascii_lowercase) and (high_lim in ascii_lowercase)):
@@ -149,7 +194,7 @@ class NFAGenerator():
         ########################## POSTFIX STRING GENERATION #########################################
         return self.postfix
     
-    def regex_or(self, push_to_op_stack=True):
+    def regex_or(self, push_to_op_stack=True) -> None:
         # OR a|b
         # pop the last two nfas.
         if ( len(self.last_op_stack) >= 2 ):
@@ -179,10 +224,11 @@ class NFAGenerator():
         or_nfa.last_op = '|'
         # pushing the merged or nfa to the stack frame.
         self.nfa_stack_frames.append(or_nfa)
+        print(or_nfa)
         # add last op
         if (push_to_op_stack): self.last_op_stack.append('|')
         
-    def regex_character(self, char, push_to_op_stack=True):
+    def regex_character(self, char, push_to_op_stack=True) -> None:
         # CHARACTER state(A) -char-> state(B)
         start_state = state() # adding initial state
         final_state = state() # adding ending state
@@ -216,24 +262,34 @@ class NFAGenerator():
     #     self.regex_concatenation(False) # merges the (nfa1)·(nfa2)* into a single nfa
     #     if (push_to_op_stack): self.last_op_stack.append('+')
     
-    def regex_concatenation(self, push_to_op_stack=True):
+    def regex_concatenation(self, push_to_op_stack=True) -> None:
         # CONCATENATION/UNION EXPRESSION 
         nfa2: epsilon_nfa = self.nfa_stack_frames.pop()
         nfa1: epsilon_nfa = self.nfa_stack_frames.pop()
-        # the accepting state of the first nfa will be the starting state of the second nfa
-        nfa1.final_state.edges[None] = nfa2.start_state
-        concatenation_nfa = epsilon_nfa(nfa1.start_state, nfa2.final_state)
-        # adding the new nfa of the concatenated string.
-        self.nfa_stack_frames.append(concatenation_nfa)
+        if ((self.last_op_stack[-1] == 'c') and (self.last_op_stack[-2] == 'c')):
+            char, state_f = list(nfa2.start_state.edges.items())[0] # get the char that creates the transition to the end state nfa.
+            nfa1.final_state.edges[char] = state_f
+            nfa1.final_state = state_f
+            # ALL_STATES.pop(nfa2.start_state.label)
+            nfa2.start_state.__del__()
+            self.nfa_stack_frames.append(nfa1)
+            print(999)
+        else:
+            # the accepting state of the first nfa will be the starting state of the second nfa
+            nfa1.final_state.edges[None] = nfa2.start_state
+            concatenation_nfa = epsilon_nfa(nfa1.start_state, nfa2.final_state)
+            # adding the new nfa of the concatenated string.
+            self.nfa_stack_frames.append(concatenation_nfa)
+            print(f"\n{concatenation_nfa}")
         if (push_to_op_stack): self.last_op_stack.append('·')
         
-    def regex_question_mark(self, char, push_to_op_stack=True):
+    def regex_question_mark(self, char, push_to_op_stack=True) -> None:
         self.regex_character('ε', False) # create epsilon constrution without registering it as a char operation.
         # the character nfa is already the [-2] in the stack, the [-1] is epsilon.
         self.regex_or(False) # Create an or construction without registering it as a or operation.
         if (push_to_op_stack): self.last_op_stack.append('?')
         
-    def regex_kleene(self, push_to_op_stack=True):
+    def regex_kleene(self, push_to_op_stack=True) -> None:
         # poping the previous nfa that we are going to do (nfa)*
         nfa1: epsilon_nfa = self.nfa_stack_frames.pop()
         # start and final states for the new nfa
@@ -244,18 +300,19 @@ class NFAGenerator():
         # adding epsilon to the final state in the case of just epsilon. 
         start_state.edges[None] = final_state
         # adding an edge for repetition to the begining of the already constructed nfa.
-        nfa1.final_state.edges[None] = nfa1.start_state
+        nfa1.final_state.edges[None] = nfa1.start_state 
         # adding to the final state of the constructed nfa an edge to the new final state
         nfa1.final_state.edges[None] = final_state
         # creating the kleene star nfa 
         kleene_nfa: epsilon_nfa = epsilon_nfa(start_state, final_state)
         # push to the stack frames.
+        print(f"\n{kleene_nfa}")
         self.nfa_stack_frames.append(kleene_nfa)
         if (push_to_op_stack): self.last_op_stack.append('*')
 
-    def thompson_construction(self):
+    def thompson_construction(self) -> None:
         """ This turns the regex into epsilon nfa, epsilon will be represented by 'None' """
-        if DEBUG: self.file.write(self.postfix + '\n')
+        if DEBUG: self.debug_info.write(self.postfix + '\n')
         index = 0
         for char in self.postfix:
             # The sight of an operator means we already have at least one nfa stack frame
@@ -269,15 +326,54 @@ class NFAGenerator():
                 self.regex_or(char)
             else:
                 self.regex_character(char)
-            # print(char)
             if DEBUG:
                 for i in self.nfa_stack_frames:
-                    self.file.write(f"{i}\n")
-                self.file.write(f"index: {index} {char} "+"-"*100+'\n')
+                    self.debug_info.write(f"{i}\n")
+                self.debug_info.write(f"index: {index} {char} "+"-"*100+'\n')
                 index += 1
-        if DEBUG: self.file.write(f"{self.nfa_stack_frames}\n")
+        if DEBUG: self.debug_info.write(f"{self.nfa_stack_frames}\n")
+        if (len(self.nfa_stack_frames) != 1): 
+            if DEBUG: 
+                print(f"ERROR: nfa_stack_frames has length of {len(self.nfa_stack_frames)}")
+            else:
+                self.error_log.write(f"ERROR: nfa_stack_frames has length of {len(self.nfa_stack_frames)}" + '\n')
+            exit(-1)
+        self.finished_nfa = self.nfa_stack_frames.pop()
+        
+
+    def epsilon_closure(self, current_state:state) -> set:
+        # base case is that it can no longer move on epsilon
+        ec = []
+        ec.append(current_state)
+        if (current_state.edges.get(None) == None):
+            return ec
+        else:
+            for edge in current_state.edges.get(None):
+                ec += self.epsilon_closure(edge)
+        return ec
 
 
-nfa = NFAGenerator("-?·[0-9]·[0-9]*·(.·[0-9])?")
-# print(nfa.infix_to_postfix())
-nfa.thompson_construction()
+    def match_string_to_nfa(self, string_to_match) -> bool:
+        current_states: Iterable[state] = []
+        next_state: Iterable[state] = []
+        # current_states += self.epsilon_closure(self.finished_nfa.start_state)
+        # print(current_states)
+        # for c in string_to_match:
+        #     for s in current_states:
+        #         if s.edges.get(c) != None:
+        #             next_state += self.epsilon_closure
+
+if __name__ == '__main__':
+    # args = command_line_interpreter()
+    # if (args.get('o')):
+    #     outname = args['o']
+    # if (args.get('target')):
+    #     stage = args['target']
+    # if (args.get('debug')):
+    #     debug_stages = args['debug'].split(':') ·a·b·b
+    nfa = NFAtoDFAGenerator("(a|b)*·a") # "-?·[0-9]·[0-9]*·(.·[0-9])?"
+    nfa.thompson_construction()
+    # print(nfa.finished_nfa)
+    # nfa.match_string_to_nfa("true")
+    # for k,v in ALL_STATES.items():
+    #     print(f"{k}: {v}")
