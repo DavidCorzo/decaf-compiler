@@ -1,16 +1,26 @@
-ab|*a·
-nfa: state=0 edges={'a': state=1 edges={}}
+ab|*a·b·b·
+start=0 final=1
 index: 0 a ----------------------------------------------------------------------------------------------------
-nfa: state=0 edges={'a': state=1 edges={}}
-nfa: state=2 edges={'b': state=3 edges={}}
+start=0 final=1
+start=2 final=3
 index: 1 b ----------------------------------------------------------------------------------------------------
-nfa: state=4 edges={None: [state=0 edges={'a': state=1 edges={None: [state=5 edges={}]}}, state=2 edges={'b': state=3 edges={None: [state=5 edges={}]}}]}
+start=4 final=5
 index: 2 | ----------------------------------------------------------------------------------------------------
-nfa: state=6 edges={None: [state=4 edges={None: [state=0 edges={'a': state=1 edges={None: [state=5 edges={None: [state=4 edges={...}, state=7 edges={}]}]}}, state=2 edges={'b': state=3 edges={None: [state=5 edges={None: [state=4 edges={...}, state=7 edges={}]}]}}]}, state=7 edges={}]}
+start=6 final=7
 index: 3 * ----------------------------------------------------------------------------------------------------
-nfa: state=6 edges={None: [state=4 edges={None: [state=0 edges={'a': state=1 edges={None: [state=5 edges={None: [state=4 edges={...}, state=7 edges={}]}]}}, state=2 edges={'b': state=3 edges={None: [state=5 edges={None: [state=4 edges={...}, state=7 edges={}]}]}}]}, state=7 edges={}]}
-nfa: state=8 edges={'a': state=9 edges={}}
+start=6 final=7
+start=8 final=9
 index: 4 a ----------------------------------------------------------------------------------------------------
-nfa: state=6 edges={None: [state=4 edges={None: [state=0 edges={'a': state=1 edges={None: [state=5 edges={None: [state=4 edges={...}, state=7 edges={None: [state=8 edges={'a': state=9 edges={}}]}]}]}}, state=2 edges={'b': state=3 edges={None: [state=5 edges={None: [state=4 edges={...}, state=7 edges={None: [state=8 edges={'a': state=9 edges={}}]}]}]}}]}, state=7 edges={None: [state=8 edges={'a': state=9 edges={}}]}]}
+start=6 final=9
 index: 5 · ----------------------------------------------------------------------------------------------------
-[nfa: state=6 edges={None: [state=4 edges={None: [state=0 edges={'a': state=1 edges={None: [state=5 edges={None: [state=4 edges={...}, state=7 edges={None: [state=8 edges={'a': state=9 edges={}}]}]}]}}, state=2 edges={'b': state=3 edges={None: [state=5 edges={None: [state=4 edges={...}, state=7 edges={None: [state=8 edges={'a': state=9 edges={}}]}]}]}}]}, state=7 edges={None: [state=8 edges={'a': state=9 edges={}}]}]}]
+start=6 final=9
+start=10 final=11
+index: 6 b ----------------------------------------------------------------------------------------------------
+start=6 final=11
+index: 7 · ----------------------------------------------------------------------------------------------------
+start=6 final=11
+start=12 final=13
+index: 8 b ----------------------------------------------------------------------------------------------------
+start=6 final=13
+index: 9 · ----------------------------------------------------------------------------------------------------
+[start=6 final=13]
