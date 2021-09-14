@@ -1,11 +1,18 @@
-from os import closerange
 from string import ascii_lowercase, ascii_uppercase
 from typing import Iterable
-from typing_extensions import final 
+import argparse
 
 DIGITS = "0123456789"
 SIGMA = ascii_lowercase + ascii_uppercase + DIGITS + "()+-*<>/%=!\"'}{"
 DEBUG = True
+
+def command_line_interpreter() -> dict:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--o', help="rename file with -o")
+    parser.add_argument('--target', help="-target <stage>", choices=["scan", "parse", "ast", "irt", "codegen"])
+    parser.add_argument('--debug', help="-debug <stage>")
+    args = parser.parse_args()
+    return args.__dict__
 
 class dictlist(dict):
     def __setitem__(self, key, value):
@@ -37,7 +44,12 @@ def label_maker() -> int:
         num += 1    
 
 label_gen = label_maker()
+dfa_label_gen = label_maker()
 states = dict()
+dfa_states = dict()
+dfa_states_names = dict()
+closure_of_all_states = dict()
+
 
 class enfa:
     def __init__(self, start_state = None, final_state = None):
@@ -56,8 +68,17 @@ class enfa:
 
     def __str__(self) -> str:
         return f"start={self.start_state} final={self.final_state}"
-    
 
+class dfa:
+    def __init__(self, start_state = None, final_state = set()):
+        self.start_state : int = start_state
+        self.final_states:  Iterable[int] = final_state
+    
+    def __repr__(self) -> str:
+        return f"dfa: start={self.start_state} end={self.final_states}"
+
+    def __str__(self) -> str:
+        return f"dfa: start={self.start_state} end={self.final_states}"
 
 class Graph:
     def __init__(self, infix:str):
@@ -65,6 +86,9 @@ class Graph:
         self.postfix            :str            = self.infix_to_postfix()
         self.nfa_stack_frames   :Iterable[enfa] = [] 
         self.last_op_stack      :Iterable[str]  = []
+        self.nfa                :enfa           = None
+        self.input_alphabet     :str            = set()
+        self.dfa                :dfa            = dfa()
         # file report and error log.
         self.debug_info = open("report.txt", mode="a")
         self.debug_info.truncate(0)
@@ -230,7 +254,7 @@ class Graph:
         self.nfa_stack_frames.append(new_nfa)
         if (push_to_op_stack): self.last_op_stack.append('*')
 
-    def e_closure(self, state):
+    def e_closure(self, state) -> set:
         closure_states = set()
         closure_states.add(state)
         if (states[state].get(None) == None): # there is no epsilon key.
@@ -257,6 +281,9 @@ class Graph:
                 self.regex_or(char)
             else:
                 self.regex_character(char)
+                if (char != 'ε'):
+                    self.input_alphabet.add(char)
+
             if DEBUG:
                 for i in self.nfa_stack_frames:
                     self.debug_info.write(f"{i}\n")
@@ -269,10 +296,72 @@ class Graph:
             else:
                 self.error_log.write(f"ERROR: nfa_stack_frames has length of {len(self.nfa_stack_frames)}" + f'\n{self.nfa_stack_frames}')
             exit(-1)
-        self.finished_nfa = self.nfa_stack_frames.pop()
+        self.nfa = self.nfa_stack_frames.pop()
 
-n = Graph("(a|b)*·a·b·b")
+    def calculate_closure_of_all_states(self):
+        for i in states.keys():
+            closure_of_all_states.update({i: self.e_closure(i)})
+    
+    def closures(self, set_of_states) -> tuple:
+        closure = set()
+        for i in set_of_states:
+            closure |= closure_of_all_states[i]
+        return tuple(closure)
+
+    def closure_to_dfa_state(self, new_dfa_state:tuple):
+        """
+        set_states: is the set of states that we need to perform closure on.
+        """
+        # calculate e_closure de el start_state del nfa.
+        if new_dfa_state in dfa_states.keys():
+            return
+        ec = set()
+        for state in new_dfa_state:
+            ec |= closure_of_all_states[state]
+        # print(f"ec={ec}")
+        dfa_state = {new_dfa_state: {}}
+        for char in self.input_alphabet:
+            for state in ec:
+                # iterate over the keys and see if char is in the state
+                for transition_letter, next_state in states[state].items():
+                    if (transition_letter == char):
+                        # print(state, states[state])
+                        if (dfa_state[new_dfa_state].get(char) == None):
+                            dfa_state[new_dfa_state].update({char : set()})
+                        dfa_state[new_dfa_state][char].add(next_state)
+                        
+        dfa_state[new_dfa_state] = {k:tuple(sorted(v)) for k,v in dfa_state[new_dfa_state].items()}
+        dfa_states.update(dfa_state)
+        if self.nfa.final_state in new_dfa_state:
+            self.dfa.final_states.add(new_dfa_state)
+        for key, value in dfa_state[new_dfa_state].items():
+            self.closure_to_dfa_state(value)
+        
+    def turn_to_dfa(self):
+        self.dfa.start_state = tuple([self.nfa.start_state])
+        self.closure_to_dfa_state(tuple([self.nfa.start_state]))
+        for k,v in dfa_states.items():
+            print(k,v)
+        print(self.dfa)
+    
+    def match(self, string_to_match) -> bool:
+        current_state = self.dfa.start_state
+        for char in string_to_match:
+            if (dfa_states[current_state].get(char) != None):
+                current_state = dfa_states[current_state][char]
+                # print(current_state)
+            else:
+                return False
+        if (current_state in self.dfa.final_states):
+            return True
+        else:
+            return False
+        
+
+n = Graph("(a|b)*·a·b·b") #  -?·[0-9]·[0-9]*·(.·[0-9])?
 n.thompson_construction()
 print(states)
-print()
-print(n.e_closure(5))
+print(n.nfa)
+n.calculate_closure_of_all_states()
+n.turn_to_dfa()
+print(n.match("aabbb"))
