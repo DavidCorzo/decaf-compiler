@@ -1,6 +1,7 @@
 from string import ascii_lowercase, ascii_uppercase
 from typing import Iterable
 import argparse
+from draw import draw_graph
 
 DIGITS = "0123456789"
 SIGMA = ascii_lowercase + ascii_uppercase + DIGITS + "()+-*<>/%=!\"'}{"
@@ -147,9 +148,14 @@ class Graph:
             if char == '(': 
                 stack.append(char)
             elif char == ')':
-                while (stack[-1] != '('): 
+                while (stack[-1] != '('):
                     self.postfix += stack.pop()
                 stack.pop()
+            elif char == '\\':
+                self.postfix += char
+                i += 1
+                self.postfix += self.infix[i]
+
             elif char in precedence.keys():
                 while ( (len(stack) != 0) and  (precedence.get(char, 0) <= precedence.get(stack[-1], 0))):
                     self.postfix += stack.pop()
@@ -269,8 +275,9 @@ class Graph:
         """ This turns the regex into epsilon nfa, epsilon will be represented by 'None' """
         if DEBUG: self.debug_info.write(self.postfix + '\n')
         index = 0
-        for char in self.postfix:
+        while (index < len(self.postfix)):
             # The sight of an operator means we already have at least one nfa stack frame
+            char = self.postfix[index]
             if (char == '?'):
                 self.regex_question_mark(char)
             elif (char == '*'):
@@ -279,17 +286,22 @@ class Graph:
                 self.regex_concatenation()
             elif (char == '|'):
                 self.regex_or(char)
+            elif (char == '\\'):
+                index += 1
+                char += self.postfix[index]
+                print(char)
+                self.regex_character(char)
             else:
                 self.regex_character(char)
                 if (char != 'ε'):
                     self.input_alphabet.add(char)
-
-            if DEBUG:
-                for i in self.nfa_stack_frames:
-                    self.debug_info.write(f"{i}\n")
-                self.debug_info.write(f"index: {index} {char} "+"-"*100+'\n')
-                index += 1
-        if DEBUG: self.debug_info.write(f"{self.nfa_stack_frames}\n")
+            index += 1
+            # if DEBUG:
+            #     for i in self.nfa_stack_frames:
+            #         self.debug_info.write(f"{i}\n")
+            #     self.debug_info.write(f"index: {index} {char} "+"-"*100+'\n')
+            #     index += 1
+        # if DEBUG: self.debug_info.write(f"{self.nfa_stack_frames}\n")
         if (len(self.nfa_stack_frames) != 1): 
             if DEBUG: 
                 print(f"ERROR: nfa_stack_frames has length of {len(self.nfa_stack_frames)}")
@@ -356,12 +368,26 @@ class Graph:
             return True
         else:
             return False
-        
+    
+    def draw_nfa(self):
+        edges = []
+        labels = []
+        print(states)
+        for state,char_next_state in states.items():
+            for char, next_state in char_next_state.items():
+                if char == None:
+                    for i in next_state:
+                        edges.append([state, i])
+                        labels.append('ε')
+                else:
+                    edges.append([state, next_state])
+                    labels.append(char)
+        draw_graph(edges, labels)
 
-n = Graph("(a|b)*·a·b·b") #  -?·[0-9]·[0-9]*·(.·[0-9])?
+n = Graph("[0-9]") #  -?·[0-9]·[0-9]*·(.·[0-9])?
 n.thompson_construction()
-print(states)
-print(n.nfa)
-n.calculate_closure_of_all_states()
-n.turn_to_dfa()
-print(n.match("aabbb"))
+n.draw_nfa()
+# n.calculate_closure_of_all_states()
+# n.turn_to_dfa()
+# print(n.match("aaaaaabb"))
+# print(n.match("abbaaaaabb"))
