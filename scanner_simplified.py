@@ -344,7 +344,7 @@ class Graph:
                         
         dfa_state[new_dfa_state] = {k:tuple(sorted(v)) for k,v in dfa_state[new_dfa_state].items()}
         dfa_states.update(dfa_state)
-        if self.nfa.final_state in new_dfa_state:
+        if self.nfa.final_state in self.closures(new_dfa_state):
             self.dfa.final_states.add(new_dfa_state)
         for key, value in dfa_state[new_dfa_state].items():
             self.closure_to_dfa_state(value)
@@ -352,9 +352,9 @@ class Graph:
     def turn_to_dfa(self):
         self.dfa.start_state = tuple([self.nfa.start_state])
         self.closure_to_dfa_state(tuple([self.nfa.start_state]))
-        for k,v in dfa_states.items():
-            print(k,v)
-        print(self.dfa)
+        # for k,v in dfa_states.items():
+        #     print(k,v)
+        # print(self.dfa)
     
     def match(self, string_to_match) -> bool:
         current_state = self.dfa.start_state
@@ -372,21 +372,42 @@ class Graph:
     def draw_nfa(self):
         edges = []
         labels = []
-        print(states)
         for state,char_next_state in states.items():
             for char, next_state in char_next_state.items():
-                if char == None:
+                if (char == None):
                     for i in next_state:
                         edges.append([state, i])
                         labels.append('ε')
                 else:
                     edges.append([state, next_state])
                     labels.append(char)
+        print(self.nfa)
+        draw_graph(edges, labels)
+    
+    def draw_dfa(self):
+        edges = []
+        labels = []
+        for state,char_next_state in dfa_states.items():
+            for char, next_state in char_next_state.items():
+                if (char == None):
+                    for i in next_state:
+                        edges.append([state, i])
+                        labels.append('ε')
+                else:
+                    edges.append([state, next_state])
+                    labels.append(char)
+        print(self.dfa)
         draw_graph(edges, labels)
 
-n = Graph("[0-9]") #  -?·[0-9]·[0-9]*·(.·[0-9])?
+n = Graph("(a|b)?") #  -?·[0-9]·[0-9]*·(.·[0-9])?
 n.thompson_construction()
-n.draw_nfa()
+n.calculate_closure_of_all_states()
+n.turn_to_dfa()
+# print(states)
+print(dfa_states)
+print(n.dfa)
+# n.draw_nfa()
+# n.draw_dfa()
 # n.calculate_closure_of_all_states()
 # n.turn_to_dfa()
 # print(n.match("aaaaaabb"))
