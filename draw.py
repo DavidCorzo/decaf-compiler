@@ -20,8 +20,8 @@ def draw_graph(edges, labels):
     G.add_edges_from(edges)
 
     # pos = nx.spring_layout(G)
-    # pos = nx.circular_layout(G)
-    pos = nx.spring_layout(G)
+    pos = nx.circular_layout(G)
+    # pos = nx.spring_layout(G)
 
     plt.figure()    
     nx.draw(G,pos,edge_color='black',width=1,linewidths=1,node_size=500,node_color='gray',alpha=0.5, labels={node:node for node in G.nodes()})
