@@ -400,7 +400,8 @@ class DFA:
         self.dfa.start_state = self.dfa_states_names[self.dfa.start_state]
         named_final_states = set()
         for state in self.dfa.final_states:
-            named_final_states.
+            named_final_states.add(self.dfa_states_names[state])
+        self.dfa.final_states = named_final_states
 
     def turn_to_dfa(self):
         self.calculate_closure_of_all_states()
