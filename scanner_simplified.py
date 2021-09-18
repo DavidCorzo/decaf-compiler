@@ -1,3 +1,4 @@
+from os import error
 from string import ascii_lowercase, ascii_uppercase
 from typing import Iterable
 import argparse
@@ -173,7 +174,7 @@ class NFA:
         # pop the last two nfas.
         if ( len(self.last_op_stack) >= 2 ):
             # the last operation was an or then it is a chained or.
-            if ( (self.last_op_stack[-2] == '|') and (self.last_op_stack[-1] == 'c') ): 
+            if ( (self.last_op_stack[-1] == 'c') and (self.last_op_stack[-2] == '|') ): 
                 character_nfa: enfa = self.nfa_stack_frames.pop() # pop the character nfa
                 or_nfa: enfa        = self.nfa_stack_frames.pop() # pop the or nfa
                 self.states[or_nfa.start_state][None] = character_nfa.start_state
@@ -233,9 +234,10 @@ class NFA:
         if (push_to_op_stack): self.last_op_stack.append('·')
         
     def regex_question_mark(self, char, push_to_op_stack=True) -> None:
-        self.regex_character('ε', False) # create epsilon constrution without registering it as a char operation.
-        # the character nfa is already the [-2] in the stack, the [-1] is epsilon.
-        self.regex_or(False) # Create an or construction without registering it as a or operation.
+        # self.regex_character('ε', False) # create epsilon constrution without registering it as a char operation.
+        # # the character nfa is already the [-2] in the stack, the [-1] is epsilon.
+        # self.regex_or(False) # Create an or construction without registering it as a or operation.
+        self.states[self.nfa_stack_frames[-1].start_state][None] = self.nfa_stack_frames[-1].final_state
         if (push_to_op_stack): self.last_op_stack.append('?')
         
     def regex_kleene(self, push_to_op_stack=True) -> None:
@@ -318,6 +320,7 @@ class DFA:
         self.input_alphabet = nfa.input_alphabet
         self.nfa = nfa.nfa
         self.dfa:dfa = dfa()
+        self.current_position:int = None
 
     def e_closure(self, state) -> set:
         closure_states = set()
@@ -435,7 +438,7 @@ class DFA:
                 else:
                     edges.append([state, next_state])
                     labels.append(char)
-        print(self.dfa)
+        # print(self.dfa)
         draw_graph(edges, labels)
     
     def __repr__(self) -> str:
@@ -443,27 +446,96 @@ class DFA:
 
     def __str__(self) -> str:
         return f"({self.dfa_states})"
+    
+    def consume(self, char) -> bool:
+        if (self.current_position == None):
+            self.current_position = self.dfa.start_state
+        if (self.dfa_states[self.current_position].get(char) == None):
+            return False
+        else:
+            self.current_position = self.dfa_states[self.current_position][char]
+            # print(self.current_position)
+            return True
 
-class lexer_graph():
-    def __init__(self, list_of_dfas):
+class scanner:
+    def __init__(self, file):
+        self.file = file
+        self.current_line = 0
+        self.current_line_index = 0
+        self.char = None
+        self.lines = dict()
+        with open(self.file, mode="r") as file:
+            line_num = 0
+            for line in file.readlines():
+                self.lines.update({line_num: line})
+                line_num += 1
+        
+    def advance(self):
+        self.current_line_index += 1
+    
+    def peek_current(self):
+        if (self.lines.get(self.current_line) != None):
+            if (self.current_line_index < len(self.lines[self.current_line_index])):
+                return self.lines[self.current_line][self.current_line_index]
+        return None
+    
+    def peek_next(self):
+        if (self.lines.get(self.current_line) != None):
+            if (self.current_line_index < len(self.lines[self.current_line_index])):
+                return self.lines[self.current_line][self.current_line_index + 1]
+        return None
 
-        pass
+class error_msg:
+    def __init__(self, scanner_pos:scanner):
+        self.line = scanner_pos.current_line
+        self.line_index = scanner_pos.current_line
+        self.char = scanner_pos.char
+    
+    def illegal_character(self):
+        print(f"ILLEGAL CHARACTER FOUND '{self.char}'")
+        print(f"illegal character found at line {self.line} column {self.line_index}")
+        exit(-1)
+    
+    def no_regex_match(self):
+        print(f"NO KEYWORD MATCH FOR {self.char}")
+        print(f"No match was found for the above char in line {self.line} column {self.line_index}")
+        exit(-1)
+
+
 
 if __name__ == '__main__':
-    tokens = {
-        "TYPE": "(i·n·t|b·o·o·l·e·a·n)", 
-        "IF": "i·f", 
-        "BOOL_LITERAL": "(t·r·u·e|f·a·l·s·e)" 
-    }
-    deterministic_finite_automata = {}
-    for token, regex in tokens.items():
-        nfa1 = NFA(regex)
-        nfa1.thompson_construction()
-        dfa1 = DFA(nfa1)
-        dfa1.turn_to_dfa()
-        dfa1.draw_dfa()
-        deterministic_finite_automata.update({token: dfa1})
-    print(deterministic_finite_automata)
+    # tokens = {
+    #     "TYPE": "(i·n·t|b·o·o·l·e·a·n)", 
+    #     "IF": "i·f", 
+    #     "BOOL_LITERAL": "(t·r·u·e|f·a·l·s·e)",
+    #     "ID": "[a-zA-Z_]·[a-zA-Z0-9_]*",
+    # }
+    # deterministic_finite_automata = {}
+    # for token, regex in tokens.items():
+    #     nfa1 = NFA(regex)
+    #     nfa1.thompson_construction()
+    #     dfa1 = DFA(nfa1)
+    #     dfa1.turn_to_dfa()
+    #     deterministic_finite_automata.update({token: [dfa1, True]})
+    
+    # word = "if (a == 0) {return false;}"
+    # for char in word:
+    #     if char not in " (){}=":
+    #         for token in tokens.keys():
+    #             if (deterministic_finite_automata[token][1]):
+    #                 if (not deterministic_finite_automata[token][0].consume(char)):
+    #                     deterministic_finite_automata[token][1] = False
+    #                     print(f"remove: {token}")
+    #     elif char in '\n':
+    #         continue
+    #     else:
+    #         if char == '(':
+    #             pass
+    #         elif char == ')':
+    #             pass
+
+    error_msg(scanner("./src_code.txt")).illegal_character()
+    # print([f"{x[0]} {x[1][1]}" for x in deterministic_finite_automata.items()])
 
 
 
