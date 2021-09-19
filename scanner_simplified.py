@@ -1,10 +1,8 @@
 from os import error
 from string import ascii_lowercase, ascii_uppercase
-from typing import Iterable
+from typing import Iterable, OrderedDict
 import argparse
-import yaml
-# from draw import draw_graph
-from dataclasses import dataclass
+from yaml import load, load_all, safe_load
 
 DIGITS = "0123456789"
 SIGMA = ascii_lowercase + ascii_uppercase + DIGITS + "()+-*<>/%=!\"'}{"
@@ -277,7 +275,9 @@ class NFA:
                 self.regex_or(char)
             elif (char == '\\'):
                 index += 1
-                char += self.postfix[index]
+                char = self.postfix[index]
+                if char == 'n': char = '\n'
+                elif char == 't': char = '\t'
                 self.regex_character(char)
                 self.input_alphabet.add(char)
             else:
@@ -291,6 +291,7 @@ class NFA:
                 print(f"ERROR: nfa_stack_frames has length of {len(self.nfa_stack_frames)}")
             else:
                 print(f"ERROR: nfa_stack_frames has length of {len(self.nfa_stack_frames)}" + f'\n{self.nfa_stack_frames}')
+            print(f"{self.infix} is incorrect")
             exit(-1)
         self.nfa = self.nfa_stack_frames.pop()
         
@@ -321,6 +322,7 @@ class DFA:
         self.nfa = nfa.nfa
         self.dfa:dfa = dfa()
         self.current_position:int = None
+        self.current_match = False
 
     def e_closure(self, state) -> set:
         closure_states = set()
@@ -456,34 +458,84 @@ class DFA:
             self.current_position = self.dfa_states[self.current_position][char]
             # print(self.current_position)
             return True
+    
 
 class scanner:
-    def __init__(self, file):
-        self.file = file
+    def __init__(self, filename, token_file):
+        self.filename = filename
         self.current_line = 0
         self.current_line_index = 0
-        self.char = None
-        self.lines = dict()
-        with open(self.file, mode="r") as file:
-            line_num = 0
-            for line in file.readlines():
-                self.lines.update({line_num: line})
-                line_num += 1
-        
-    def advance(self):
-        self.current_line_index += 1
+        self.file = open(filename, mode="r")
+        self.content = self.file.read()
+        self.content_index = 0
+        self.line_num = 0
+        self.char_num = 0
+        with open(token_file, mode="r") as file:
+            self.tokens = OrderedDict(safe_load(file))
+            file.close()
+        self.linked_list_of_tokens = []
+        self.candidates = []
+        self.deterministic_finite_automata = {}
     
+    def produce_automata(self):
+        for token, regex in self.tokens.items():
+            nfa1 = NFA(regex)
+            nfa1.thompson_construction()
+            dfa1 = DFA(nfa1)
+            dfa1.turn_to_dfa()
+            self.deterministic_finite_automata.update({token: dfa1})
+        
+    def next_char(self):
+        self.content_index += 1         
+        
     def peek_current(self):
-        if (self.lines.get(self.current_line) != None):
-            if (self.current_line_index < len(self.lines[self.current_line_index])):
-                return self.lines[self.current_line][self.current_line_index]
-        return None
+        if self.content_index < len(self.content):
+            return self.content[self.content_index]
+        else:
+            return None
     
     def peek_next(self):
-        if (self.lines.get(self.current_line) != None):
-            if (self.current_line_index < len(self.lines[self.current_line_index])):
-                return self.lines[self.current_line][self.current_line_index + 1]
+        if ((self.content_index + 1) < len(self.content)):
+            return self.content[self.content_index + 1]
+        else:
+            return None
+    
+    def recognize(self, buffer):
+        for token, determ_fa in self.deterministic_finite_automata.items():
+            if (determ_fa.match(buffer)):
+                return token
         return None
+
+    def scan(self):
+        buffer = ""
+        while (self.content_index < len(self.content)):
+            char = self.content[self.content_index]
+            if char in " \n\t":
+                if buffer != '':
+                    self.line_num += 1
+                    match_regex = self.recognize(buffer)
+                    if (match_regex):
+                        self.linked_list_of_tokens.append((match_regex, buffer))
+                    print(self.linked_list_of_tokens)
+                buffer = ""
+            elif char in "(){};<>=!+-*/;":
+                symbol = char
+                next_char = self.peek_next()
+                if next_char != None:
+                    if next_char in "=<>":
+                        symbol += next_char
+                
+                if buffer != '':
+                    match_regex = self.recognize(buffer)
+                    self.linked_list_of_tokens.append((match_regex, buffer))
+                match_regex = self.recognize(symbol)
+                self.linked_list_of_tokens.append((match_regex, symbol))
+                print(self.linked_list_of_tokens)
+                buffer = ""
+            else:
+                buffer += char
+
+            self.next_char()
 
 class error_msg:
     def __init__(self, scanner_pos:scanner):
@@ -504,23 +556,13 @@ class error_msg:
 
 
 if __name__ == '__main__':
-    # tokens = {
-    #     "TYPE": "(i·n·t|b·o·o·l·e·a·n)", 
-    #     "IF": "i·f", 
-    #     "BOOL_LITERAL": "(t·r·u·e|f·a·l·s·e)",
-    #     "ID": "[a-zA-Z_]·[a-zA-Z0-9_]*",
-    # }
-    # deterministic_finite_automata = {}
-    # for token, regex in tokens.items():
-    #     nfa1 = NFA(regex)
-    #     nfa1.thompson_construction()
-    #     dfa1 = DFA(nfa1)
-    #     dfa1.turn_to_dfa()
-    #     deterministic_finite_automata.update({token: [dfa1, True]})
     
-    # word = "if (a == 0) {return false;}"
+    code = scanner("./src_code.txt", "./tokens.yaml")
+    code.produce_automata()
+    code.scan()
+    
     # for char in word:
-    #     if char not in " (){}=":
+    #     if char not in " (){}=<>":
     #         for token in tokens.keys():
     #             if (deterministic_finite_automata[token][1]):
     #                 if (not deterministic_finite_automata[token][0].consume(char)):
@@ -533,8 +575,6 @@ if __name__ == '__main__':
     #             pass
     #         elif char == ')':
     #             pass
-
-    error_msg(scanner("./src_code.txt")).illegal_character()
     # print([f"{x[0]} {x[1][1]}" for x in deterministic_finite_automata.items()])
 
 
