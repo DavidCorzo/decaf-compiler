@@ -1,9 +1,7 @@
 TYPE: "(i·n·t|b·o·o·l·e·a·n)"
-TYPE: "(i·n·t|b·o·o·l·e·a·n)"
 IF: "i·f"
 BOOL_LITERAL: "(t·r·u·e|f·a·l·s·e)"
 ASSIGN_OP: "=|+·=|-·="
-# STRING_LITERAL: "\"·(\\·[\\nt]|[-a-zA-Z0-9:./\\(\\)+*&%$#])·\""
 REL_OP: "<|>|(<·=)|(>·=)"
 EQ_OP: "=·=|!·="
 COND_OP: "&·&|\\|·\\|"
@@ -18,3 +16,5 @@ SEMICOLON: ";"
 ID: "[a-zA-Z_]·[a-zA-Z0-9_]*"
 
 
+
+# STRING_LITERAL: "\"·(\\·[\\nt]|[-a-zA-Z0-9:./\\(\\)+*&%$#])·\""

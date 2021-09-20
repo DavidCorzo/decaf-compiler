@@ -1,4 +1,4 @@
 def int main() {
-    int a = 10;
+    int n = 10;
     return 0
 }
