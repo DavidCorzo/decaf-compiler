@@ -43,3 +43,10 @@ De cualquier error llegar a ocurrir mandamos el número de línea y el número d
 
 ## class error_msg
 Esta clase únicamente despliega errores al usuario si llegase a haber alguno. Después de imprimir el error en pantalla termina el programa con -1 por que hubo error.
+
+
+## CLI
+El command line interfase se usa de la siguiente manera:
+```
+python <scanner_simplified.py> --target <stage> --debug <stage --o <new_name>
+```

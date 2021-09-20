@@ -4,14 +4,6 @@ from typing import Iterable, OrderedDict
 import argparse
 from yaml import safe_load
 
-def command_line_interpreter() -> dict:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--o', help="rename file with -o")
-    parser.add_argument('--target', help="-target <stage>", choices=["scan", "parse", "ast", "irt", "codegen"])
-    parser.add_argument('--debug', help="-debug <stage>")
-    args = parser.parse_args()
-    return args.__dict__
-
 class dictlist(dict):
     def __setitem__(self, key, value):
         if (key == None):
@@ -653,9 +645,17 @@ class error_msg:
         print(f"No match was found for the above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
         exit(-1)
 
-
+def command_line_interpreter() -> dict:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--o', help="rename file with -o")
+    parser.add_argument('--target', help="-target <stage>", choices=["scan", "parse", "ast", "irt", "codegen"])
+    parser.add_argument('--debug', help="-debug <stage>")
+    args = parser.parse_args()
+    return args.__dict__
 
 if __name__ == '__main__':
+    # args = command_line_interpreter()
+    # print(args)
     code = scanner("./src_code.txt", "./tokens.yaml")
     code.produce_automata()
     code.scan()
