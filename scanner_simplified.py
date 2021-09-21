@@ -401,7 +401,7 @@ class DFA:
         if new_dfa_state in self.dfa_states.keys():
             return
         ec = set()
-        for state in new_dfa_state:
+        for state in new_dfa_state: # (6,) -> (8,4,5,6)
             ec |= self.closure_of_all_states[state]
         # print(f"ec={ec}")
         dfa_state = {new_dfa_state: {}}
@@ -414,8 +414,8 @@ class DFA:
                         # print(state, states[state])
                         if (dfa_state[new_dfa_state].get(char) == None):
                             dfa_state[new_dfa_state].update({char : set()})
-                        dfa_state[new_dfa_state][char].add(next_state)
-                        
+                        dfa_state[new_dfa_state][char].add(next_state) # {(6,): {'a': {5,6}}} -> {(6,): {'a': (5,6)}}
+
         dfa_state[new_dfa_state] = {k:tuple(sorted(v)) for k,v in dfa_state[new_dfa_state].items()}
         self.dfa_states.update(dfa_state)
         if self.nfa.final_state in self.closures(new_dfa_state):
@@ -459,7 +459,7 @@ class DFA:
         """
         self.calculate_closure_of_all_states()
         self.dfa.start_state = tuple([self.nfa.start_state])
-        self.subset_construction(tuple([self.nfa.start_state]))
+        self.subset_construction(tuple([self.nfa.start_state])) # (6,)
         self.dfa_states_prettify()
     
     def match(self, string_to_match) -> bool:
@@ -595,8 +595,9 @@ class scanner:
                     else:
                         self.error.no_regex_match(self)
                 buffer = ""
-                self.line_num += 1
-                self.char_num = 0
+                if (char == '\n'):
+                    self.line_num += 1
+                    self.char_num = 0
             elif char in "(){};<>=!+-*/;":
                 symbol = char
                 next_char = self.peek_next()
