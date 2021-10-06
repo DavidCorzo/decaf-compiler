@@ -1,4 +1,11 @@
 def int main() {
-    int n = 10;
+    int y = 90, t = 56, n=10;
+    if (y == 34) {
+        y = 0;
+    }
+    else {
+        
+    }
+
     return 0
 }

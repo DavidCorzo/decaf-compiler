@@ -118,16 +118,21 @@ class NFA:
                                 char_inside += str(r)
                         elif ((low_lim in ascii_lowercase) and (high_lim in ascii_lowercase)):
                             for r in range(ord(low_lim), ord(high_lim) + 1):
-                                char_inside += chr(r)
+                                char_inside += '|' + chr(r)
                         elif ((low_lim in ascii_uppercase) and (high_lim in ascii_uppercase)):
                             for r in range(ord(low_lim), ord(high_lim) + 1):
-                                char_inside += chr(r)
+                                char_inside += '|' + chr(r)
                         else:
                             print("Error in range of regular expression.")
                             exit(-1)
                         i += 1
+                    elif (infix[i] == '\\'):
+                        print(char_inside)
+                        char_inside += '\\' + infix[i+1]
+                        i += 1
                     ii += 1
                     i  += 1
+                print(char_inside)
                 new_infix += f"({'|'.join([x for x in char_inside])})"
             else:
                 new_infix += infix[i]
@@ -135,6 +140,8 @@ class NFA:
         ########################## EXPANDING RANGES #########################################
         ########################## POSTFIX STRING GENERATION #########################################
         infix = new_infix
+        print(infix)
+        exit(-1)
         i = 0
         while (i < len(infix)):
             char = infix[i]
@@ -305,7 +312,7 @@ class NFA:
                 self.regex_concatenation()
             elif (char == '|'):
                 self.regex_or(char)
-            elif (char == '\\'):
+            elif (char == '\\'): 
                 index += 1
                 char = self.postfix[index]
                 if char == 'n': char = '\n'
@@ -519,7 +526,7 @@ class scanner:
         self.filename = filename
         self.current_line = 0
         self.current_line_index = 0
-        self.file = open(filename, mode="r")
+        self.file = open(filename, mode="r", encoding="utf-8")
         self.content = self.file.read()
         self.content_index = 0
         self.line_num = 0
@@ -591,31 +598,51 @@ class scanner:
                 if buffer != '':
                     match_regex = self.recognize(buffer)
                     if (match_regex):
-                        self.linked_list_of_tokens.append((match_regex, buffer))
+                        if (match_regex[-3:] == "_KW"):
+                            self.linked_list_of_tokens.append(buffer)
+                        else:
+                            self.linked_list_of_tokens.append((match_regex, buffer))
                     else:
                         self.error.no_regex_match(self)
                 buffer = ""
                 if (char == '\n'):
                     self.line_num += 1
                     self.char_num = 0
-            elif char in "(){};<>=!+-*/;":
+            elif char in "(){};,":
+                if buffer != '':
+                    match_regex = self.recognize(buffer)
+                    if match_regex: self.linked_list_of_tokens.append((match_regex, buffer))
+                    else: self.error.no_regex_match(self)
+                self.linked_list_of_tokens.append(char)
+                buffer = ''
+            elif char in "<>=!+-*/":
                 symbol = char
                 next_char = self.peek_next()
                 if next_char != None:
-                    if next_char in "=<>":
+                    if next_char in "=<>": 
                         symbol += next_char
-                if buffer != '':
-                    match_regex = self.recognize(buffer)
-                    if (match_regex):
-                        self.linked_list_of_tokens.append((match_regex, buffer))
-                    else:
-                        self.error.no_regex_match(self)
                 match_regex = self.recognize(symbol)
-                if (match_regex):
-                    self.linked_list_of_tokens.append((match_regex, symbol))
-                else:
-                    self.error.no_regex_match(self)
-                buffer = ""
+                if (match_regex): self.linked_list_of_tokens.append((match_regex, symbol))
+                else: self.error.no_regex_match(self)
+                buffer = ''
+            # elif char in "(){};<>=!+-*/":
+            #     symbol = char
+            #     next_char = self.peek_next()
+            #     if next_char != None:
+            #         if next_char in "=<>":
+            #             symbol += next_char
+            #     if buffer != '':
+            #         match_regex = self.recognize(buffer)
+            #         if (match_regex):
+            #             self.linked_list_of_tokens.append((match_regex, buffer))
+            #         else:
+            #             self.error.no_regex_match(self)
+            #     match_regex = self.recognize(symbol)
+            #     if (match_regex):
+            #         self.linked_list_of_tokens.append((match_regex, symbol))
+            #     else:
+            #         self.error.no_regex_match(self)
+            #     buffer = ""
             else:
                 if self.isascii(char):
                     buffer += char
@@ -642,7 +669,7 @@ class error_msg:
         exit(-1)
     
     def no_regex_match(self, scanner_instance):
-        print(f"NO KEYWORD MATCH FOR {scanner_instance.content[scanner_instance.content_index]}")
+        print(f"NO KEYWORD MATCH FOR '{scanner_instance.content[scanner_instance.content_index]}'")
         print(f"No match was found for the above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
         exit(-1)
 
