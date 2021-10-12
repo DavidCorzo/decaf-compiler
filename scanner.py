@@ -1,8 +1,8 @@
 from os import error
 from string import ascii_lowercase, ascii_uppercase, digits
 from typing import Iterable, OrderedDict
-import argparse
 from yaml import safe_load
+import pickle
 
 class dictlist(dict):
     def __setitem__(self, key, value):
@@ -14,6 +14,14 @@ class dictlist(dict):
         else:
             self.update({key:value})
 
+def add_edge(dictionary, key, value):
+    if (key == None):
+        if (dictionary.get(None) == None):
+            dictionary.update({key : set([value])})
+        else:
+            dictionary[key].add(value)
+    else:
+        dictionary.update({key : value})
 
 def num_label_maker() -> int:
     """
@@ -100,48 +108,48 @@ class NFA:
             '|': 1, '·': 2, '*': 3, '+': 4, '?': 5
         }
         ########################## EXPANDING RANGES #########################################
-        new_infix = ""
-        i = 0
-        while (i < len(infix)):
-            if (infix[i] == "["):
-                ii = 0
-                i += 1
-                char_inside = ""
-                while (infix[i] != ']'):
-                    char_inside += infix[i]
-                    if ((infix[i] == '-') and (ii != 0)):
-                        char_inside = char_inside[:-2]
-                        low_lim = infix[i-1]
-                        high_lim = infix[i+1]
-                        if ((low_lim in digits) and (high_lim in digits)):
-                            for r in range(int(low_lim), int(high_lim) + 1):
-                                char_inside += str(r)
-                        elif ((low_lim in ascii_lowercase) and (high_lim in ascii_lowercase)):
-                            for r in range(ord(low_lim), ord(high_lim) + 1):
-                                char_inside += '|' + chr(r)
-                        elif ((low_lim in ascii_uppercase) and (high_lim in ascii_uppercase)):
-                            for r in range(ord(low_lim), ord(high_lim) + 1):
-                                char_inside += '|' + chr(r)
-                        else:
-                            print("Error in range of regular expression.")
-                            exit(-1)
-                        i += 1
-                    elif (infix[i] == '\\'):
-                        print(char_inside)
-                        char_inside += '\\' + infix[i+1]
-                        i += 1
-                    ii += 1
-                    i  += 1
-                print(char_inside)
-                new_infix += f"({'|'.join([x for x in char_inside])})"
-            else:
-                new_infix += infix[i]
-            i += 1
+        # new_infix = ""
+        # i = 0
+        # while (i < len(infix)):
+        #     if (infix[i] == "["):
+        #         ii = 0
+        #         i += 1
+        #         char_inside = ""
+        #         while (infix[i] != ']'):
+        #             char_inside += infix[i]
+        #             if ((infix[i] == '-') and (ii != 0)):
+        #                 char_inside = char_inside[:-2]
+        #                 low_lim = infix[i-1]
+        #                 high_lim = infix[i+1]
+        #                 if ((low_lim in digits) and (high_lim in digits)):
+        #                     for r in range(int(low_lim), int(high_lim) + 1):
+        #                         char_inside += str(r)
+        #                 elif ((low_lim in ascii_lowercase) and (high_lim in ascii_lowercase)):
+        #                     for r in range(ord(low_lim), ord(high_lim) + 1):
+        #                         char_inside += '|' + chr(r)
+        #                 elif ((low_lim in ascii_uppercase) and (high_lim in ascii_uppercase)):
+        #                     for r in range(ord(low_lim), ord(high_lim) + 1):
+        #                         char_inside += '|' + chr(r)
+        #                 else:
+        #                     print("Error in range of regular expression.")
+        #                     exit(-1)
+        #                 i += 1
+        #             elif (infix[i] == '\\'):
+        #                 print(char_inside)
+        #                 char_inside += '\\' + infix[i+1]
+        #                 i += 1
+        #             ii += 1
+        #             i  += 1
+        #         print(char_inside)
+        #         new_infix += f"({'|'.join([x for x in char_inside])})"
+        #     else:
+        #         new_infix += infix[i]
+        #     i += 1
         ########################## EXPANDING RANGES #########################################
         ########################## POSTFIX STRING GENERATION #########################################
-        infix = new_infix
-        print(infix)
-        exit(-1)
+        # infix = new_infix
+        # print(infix)
+        # exit(-1)
         i = 0
         while (i < len(infix)):
             char = infix[i]
@@ -522,7 +530,7 @@ class DFA:
     
 
 class scanner:
-    def __init__(self, filename, token_file):
+    def __init__(self, filename, token_file=None):
         self.filename = filename
         self.current_line = 0
         self.current_line_index = 0
@@ -531,12 +539,15 @@ class scanner:
         self.content_index = 0
         self.line_num = 0
         self.char_num = 0
-        with open(token_file, mode="r") as file:
-            self.tokens = OrderedDict(safe_load(file))
-            file.close()
+        self.deterministic_finite_automata = {}
+        if token_file != None:
+            with open(token_file, mode="r") as file:
+                self.tokens = OrderedDict(safe_load(file))
+                file.close()
+        else:
+            self.load_automata()
         self.linked_list_of_tokens = []
         self.candidates = []
-        self.deterministic_finite_automata = {}
         self.error = error_msg()
     
     def produce_automata(self):
@@ -549,7 +560,18 @@ class scanner:
             dfa1 = DFA(nfa1)
             dfa1.turn_to_dfa()
             self.deterministic_finite_automata.update({token: dfa1})
-        
+    
+    def save_automata(self, fa_name):
+        with open(fa_name, mode='wb') as file:
+            pickle.dump(self.deterministic_finite_automata, file)
+            # file.close()
+    
+    def load_automata(self, fa_name):
+        with open(fa_name, mode='rb') as file:
+            # self.deterministic_finite_automata = pickle.Unpickler(file).load()
+            self.deterministic_finite_automata = pickle.load(file)
+            # file.close()
+
     def next_char(self):
         """
         Avanza al siguiente caracter en la cadena de input.
@@ -608,7 +630,7 @@ class scanner:
                 if (char == '\n'):
                     self.line_num += 1
                     self.char_num = 0
-            elif char in "(){};,":
+            elif char in "(){}[];,":
                 if buffer != '':
                     match_regex = self.recognize(buffer)
                     if match_regex: self.linked_list_of_tokens.append((match_regex, buffer))
@@ -625,24 +647,6 @@ class scanner:
                 if (match_regex): self.linked_list_of_tokens.append((match_regex, symbol))
                 else: self.error.no_regex_match(self)
                 buffer = ''
-            # elif char in "(){};<>=!+-*/":
-            #     symbol = char
-            #     next_char = self.peek_next()
-            #     if next_char != None:
-            #         if next_char in "=<>":
-            #             symbol += next_char
-            #     if buffer != '':
-            #         match_regex = self.recognize(buffer)
-            #         if (match_regex):
-            #             self.linked_list_of_tokens.append((match_regex, buffer))
-            #         else:
-            #             self.error.no_regex_match(self)
-            #     match_regex = self.recognize(symbol)
-            #     if (match_regex):
-            #         self.linked_list_of_tokens.append((match_regex, symbol))
-            #     else:
-            #         self.error.no_regex_match(self)
-            #     buffer = ""
             else:
                 if self.isascii(char):
                     buffer += char
@@ -673,18 +677,11 @@ class error_msg:
         print(f"No match was found for the above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
         exit(-1)
 
-def command_line_interpreter() -> dict:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--o', help="rename file with -o")
-    parser.add_argument('--target', help="-target <stage>", choices=["scan", "parse", "ast", "irt", "codegen"])
-    parser.add_argument('--debug', help="-debug <stage>")
-    args = parser.parse_args()
-    return args.__dict__
 
 if __name__ == '__main__':
-    # args = command_line_interpreter()
-    # print(args)
     code = scanner("./src_code.txt", "./tokens.yaml")
-    code.produce_automata()
+    # code.produce_automata()
+    # code.save_automata("tokens.pickle")
+    code.load_automata("./tokens.pickle")
     code.scan()
     print(code.linked_list_of_tokens)

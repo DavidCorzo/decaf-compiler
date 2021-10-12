@@ -1,11 +1,11 @@
-def int main() {
-    int y = 90, t = 56, n=10;
-    if (y == 34) {
-        y = 0;
-    }
-    else {
-        
-    }
+def int add(int x, int y)
+{
+    return x + y;
+}
 
-    return 0
+def int main()
+{
+    int a;
+    a = 3;
+    return add(a, 2);
 }
