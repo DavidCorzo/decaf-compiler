@@ -4,24 +4,24 @@ from typing import Iterable, OrderedDict
 from yaml import safe_load
 import pickle
 
-class dictlist(dict):
-    def __setitem__(self, key, value):
-        if (key == None):
-            if (self.get(None) == None):
-                self.update({key: set([value])})
-            else: 
-                self[key].add(value)
-        else:
-            self.update({key:value})
+# class dictlist(dict):
+#     def __setitem__(self, key, value):
+#         if (key == None):
+#             if (self.get(None) == None):
+#                 self.update({key: set([value])})
+#             else: 
+#                 self[key].add(value)
+#         else:
+#             self.update({key:value})
 
-def add_edge(dictionary, key, value):
+def add_edge(states, state, key, value):
     if (key == None):
-        if (dictionary.get(None) == None):
-            dictionary.update({key : set([value])})
+        if (states[state].get(None) == None):
+            states[state].update({key : set([value])})
         else:
-            dictionary[key].add(value)
+            states[state][key].add(value)
     else:
-        dictionary.update({key : value})
+        states[state].update({key : value})
 
 def num_label_maker() -> int:
     """
@@ -191,8 +191,10 @@ class NFA:
             if ( (self.last_op_stack[-1] == 'c') and (self.last_op_stack[-2] == '|') ): 
                 character_nfa: enfa = self.nfa_stack_frames.pop() # pop the character nfa
                 or_nfa: enfa        = self.nfa_stack_frames.pop() # pop the or nfa
-                self.states[or_nfa.start_state][None] = character_nfa.start_state
-                self.states[character_nfa.final_state][None] = or_nfa.final_state
+                ## self.states[or_nfa.start_state][None] = character_nfa.start_state
+                ## self.states[character_nfa.final_state][None] = or_nfa.final_state
+                add_edge(self.states, or_nfa.start_state, None, character_nfa.start_state)
+                add_edge(self.states, character_nfa.final_state, None, or_nfa.final_state)
                 self.nfa_stack_frames.append(or_nfa)
                 if (push_to_op_stack): self.last_op_stack.append('|') 
                 return
@@ -201,16 +203,18 @@ class NFA:
         nfa1: enfa = self.nfa_stack_frames.pop()
         # create a new initial and final state
         new_nfa = enfa()
-        self.states[new_nfa.start_state] = dictlist() # creating states in dict
-        self.states[new_nfa.final_state] = dictlist() # creating states in dict
+        self.states[new_nfa.start_state] = {} ## dictlist() # creating states in dict
+        self.states[new_nfa.final_state] = {} ## dictlist() # creating states in dict
         # adding epsilons from the new accepting state to the new accepting state.
-        self.states[new_nfa.start_state][None] = nfa1.start_state # creating edge through epsilon
-        self.states[new_nfa.start_state][None] = nfa2.start_state # creating edge through epsilon
-        # start_state.edges[None] = nfa1.start_state # (A) -epsilon-> (character nfa 1)
-        # start_state.edges[None] = nfa2.start_state # (A) -epsilon-> (character nfa 2)
+        add_edge(self.states, new_nfa.start_state, None, nfa1.start_state)
+        add_edge(self.states, new_nfa.start_state, None, nfa2.start_state)
+        ## self.states[new_nfa.start_state][None] = nfa1.start_state # creating edge through epsilon
+        ## self.states[new_nfa.start_state][None] = nfa2.start_state # creating edge through epsilon
         # adding epsilons from the old ending states to the new end state.
-        self.states[nfa1.final_state][None] = new_nfa.final_state # (character nfa 1) -epsilon-> (B)
-        self.states[nfa2.final_state][None] = new_nfa.final_state # (character nfa 2) -epsilon-> (B)
+        add_edge(self.states, nfa1.final_state, None, new_nfa.final_state)
+        add_edge(self.states, nfa2.final_state, None, new_nfa.final_state)
+        ## self.states[nfa1.final_state][None] = new_nfa.final_state # (character nfa 1) -epsilon-> (B)
+        ## self.states[nfa2.final_state][None] = new_nfa.final_state # (character nfa 2) -epsilon-> (B)
         # pushing the merged or nfa to the stack frame.
         self.nfa_stack_frames.append(new_nfa)
         # add last op
@@ -225,12 +229,14 @@ class NFA:
         registramos la operación como 'c' en el stack.
         """
         new_nfa = enfa()
-        self.states[new_nfa.start_state] = dictlist() # creating the new keys:{}
-        self.states[new_nfa.final_state] = dictlist() # creating the new keys:{}
+        self.states[new_nfa.start_state] = {} ## dictlist() # creating the new keys:{}
+        self.states[new_nfa.final_state] = {} ## dictlist() # creating the new keys:{}
         if (char != 'ε'):
-            self.states[new_nfa.start_state][char] = new_nfa.final_state
+            add_edge(self.states, new_nfa.start_state, char, new_nfa.final_state)
+            ## self.states[new_nfa.start_state][char] = new_nfa.final_state
         else:
-            self.states[new_nfa.start_state][None] = new_nfa.final_state
+            add_edge(self.states, new_nfa.start_state, None, new_nfa.final_state)
+            ## self.states[new_nfa.start_state][None] = new_nfa.final_state
         self.nfa_stack_frames.append(new_nfa)
         if (push_to_op_stack): self.last_op_stack.append('c')
 
@@ -247,14 +253,15 @@ class NFA:
         if ((self.last_op_stack[-1] == 'c')): #  and (self.last_op_stack[-2] == 'c')
             # char, state_f = list(nfa2.start_state.edges.items())[0] # get the char that creates the transition to the end state nfa.
             char, state_f = list(self.states[nfa2.start_state].items())[0]
-            self.states[nfa1.final_state][char] = state_f
+            add_edge(self.states, nfa1.final_state, char, state_f)
             nfa1.final_state = state_f
             del self.states[nfa2.start_state]
             self.nfa_stack_frames.append(nfa1)
             push_to_op_stack = False
         else:
             # the accepting state of the first nfa will be the starting state of the second nfa
-            self.states[nfa1.final_state][None] = nfa2.start_state
+            add_edge(self.states, nfa1.final_state, None, nfa2.start_state)
+            ## self.states[nfa1.final_state][None] = nfa2.start_state
             concatenation_nfa = enfa(nfa1.start_state, nfa2.final_state)
             # adding the new nfa of the concatenated string.
             self.nfa_stack_frames.append(concatenation_nfa)
@@ -266,10 +273,9 @@ class NFA:
         Basicamente agregamos una arista de épsilon en el nodo inicial nfa que esta en el top del stack al final node del mismo nfa.
         Y registramos la operación ? a menos que no especifiquen no hacerlo.
         """
-        # self.regex_character('ε', False) # create epsilon constrution without registering it as a char operation.
-        # # the character nfa is already the [-2] in the stack, the [-1] is epsilon.
-        # self.regex_or(False) # Create an or construction without registering it as a or operation.
-        self.states[self.nfa_stack_frames[-1].start_state][None] = self.nfa_stack_frames[-1].final_state
+        # the character nfa is already the [-2] in the stack, the [-1] is epsilon.
+        ## self.states[self.nfa_stack_frames[-1].start_state][None] = self.nfa_stack_frames[-1].final_state
+        add_edge(self.states, self.nfa_stack_frames[-1].start_state, None, self.nfa_stack_frames[-1].final_state)
         if (push_to_op_stack): self.last_op_stack.append('?')
         
     def regex_kleene(self, push_to_op_stack=True) -> None:
@@ -284,16 +290,20 @@ class NFA:
         nfa1: enfa = self.nfa_stack_frames.pop()
         # start and final states for the new nfa
         new_nfa = enfa()
-        self.states[new_nfa.start_state] = dictlist()
-        self.states[new_nfa.final_state] = dictlist()
+        self.states[new_nfa.start_state] = {} ## dictlist()
+        self.states[new_nfa.final_state] = {} ## dictlist()
         # adding epsilon to the start of nfa1
-        self.states[new_nfa.start_state][None] = nfa1.start_state
+        ## self.states[new_nfa.start_state][None] = nfa1.start_state
+        add_edge(self.states, new_nfa.start_state, None, nfa1.start_state)
         # adding epsilon to the final state in the case of just epsilon. 
-        self.states[new_nfa.start_state][None] = new_nfa.final_state
+        ## self.states[new_nfa.start_state][None] = new_nfa.final_state
+        add_edge(self.states, new_nfa.start_state, None, new_nfa.final_state)
         # adding an edge for repetition to the begining of the already constructed nfa.
-        self.states[nfa1.final_state][None] = nfa1.start_state
+        ## self.states[nfa1.final_state][None] = nfa1.start_state
+        add_edge(self.states, nfa1.final_state, None, nfa1.start_state)
         # adding to the final state of the constructed nfa an edge to the new final state
-        self.states[nfa1.final_state][None] = new_nfa.final_state
+        ## self.states[nfa1.final_state][None] = new_nfa.final_state
+        add_edge(self.states, nfa1.final_state, None, new_nfa.final_state)
         # creating the kleene star nfa 
         # push to the stack frames.
         self.nfa_stack_frames.append(new_nfa)
@@ -339,22 +349,22 @@ class NFA:
             exit(-1)
         self.nfa = self.nfa_stack_frames.pop()
         
-    def draw_nfa(self):
-        # for efficiency just import the function if it is required.
-        from draw import draw_graph
-        edges = []
-        labels = []
-        for state,char_next_state in self.states.items():
-            for char, next_state in char_next_state.items():
-                if (char == None):
-                    for i in next_state:
-                        edges.append([state, i])
-                        labels.append('ε')
-                else:
-                    edges.append([state, next_state])
-                    labels.append(char)
-        print(self.nfa)
-        draw_graph(edges, labels)
+    # def draw_nfa(self):
+    #     # for efficiency just import the function if it is required.
+    #     from draw import draw_graph
+    #     edges = []
+    #     labels = []
+    #     for state,char_next_state in self.states.items():
+    #         for char, next_state in char_next_state.items():
+    #             if (char == None):
+    #                 for i in next_state:
+    #                     edges.append([state, i])
+    #                     labels.append('ε')
+    #             else:
+    #                 edges.append([state, next_state])
+    #                 labels.append(char)
+    #     print(self.nfa)
+    #     draw_graph(edges, labels)
 
 class DFA:
     def __init__(self, nfa:NFA):
@@ -492,22 +502,22 @@ class DFA:
         else:
             return False
 
-    def draw_dfa(self):
-        # for efficiency just import the function if it is required.
-        from draw import draw_graph
-        edges = []
-        labels = []
-        for state,char_next_state in self.dfa_states.items():
-            for char, next_state in char_next_state.items():
-                if (char == None):
-                    for i in next_state:
-                        edges.append([state, i])
-                        labels.append('ε')
-                else:
-                    edges.append([state, next_state])
-                    labels.append(char)
-        # print(self.dfa)
-        draw_graph(edges, labels)
+    # def draw_dfa(self):
+    #     # for efficiency just import the function if it is required.
+    #     from draw import draw_graph
+    #     edges = []
+    #     labels = []
+    #     for state,char_next_state in self.dfa_states.items():
+    #         for char, next_state in char_next_state.items():
+    #             if (char == None):
+    #                 for i in next_state:
+    #                     edges.append([state, i])
+    #                     labels.append('ε')
+    #             else:
+    #                 edges.append([state, next_state])
+    #                 labels.append(char)
+    #     # print(self.dfa)
+    #     draw_graph(edges, labels)
     
     def __repr__(self) -> str:
         return f"({self.dfa_states})"
