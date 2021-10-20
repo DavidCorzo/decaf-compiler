@@ -547,8 +547,8 @@ class scanner:
         self.file = open(filename, mode="r", encoding="utf-8")
         self.content = self.file.read()
         self.content_index = 0
-        self.line_num = 0
-        self.char_num = 0
+        self.line_num = 1
+        self.char_num = 1
         self.deterministic_finite_automata = {}
         if token_file != None:
             with open(token_file, mode="r") as file:
@@ -626,11 +626,11 @@ class scanner:
         buffer = ""
         while (self.content_index < len(self.content)):
             char = self.content[self.content_index]
-            if char in " \n\t":
+            if (char in " \n\t"):
                 if buffer != '':
                     match_regex = self.recognize(buffer)
                     if (match_regex):
-                        if (match_regex[-3:] == "_KW"):
+                        if (match_regex == "<keyword>"):
                             self.linked_list_of_tokens.append(buffer)
                         else:
                             self.linked_list_of_tokens.append((match_regex, buffer))
@@ -655,6 +655,42 @@ class scanner:
                         symbol += next_char
                 match_regex = self.recognize(symbol)
                 if (match_regex): self.linked_list_of_tokens.append((match_regex, symbol))
+                else: self.error.no_regex_match(self)
+                buffer = ''
+            elif char in "\"":
+                buffer += char
+                self.content_index += 1
+                double_quote_detected = True
+                while (self.content_index < len(self.content)):
+                    char = self.content[self.content_index]
+                    buffer += char
+                    if (char == '"'):
+                        double_quote_detected = False
+                        break
+                    self.next_char()
+                    self.char_num += 1
+                if (double_quote_detected):
+                    self.error.unmatching_doublequotes(self)
+                match_regex = self.recognize(buffer)
+                if (match_regex): self.linked_list_of_tokens.append((match_regex, buffer))
+                else: self.error.no_regex_match(self)
+                buffer = ''
+            elif char in "'":
+                buffer += char
+                self.content_index += 1
+                single_quote_detected = True
+                while (self.content_index < len(self.content)):
+                    char = self.content[self.content_index]
+                    buffer += char
+                    if (char == '\''):
+                        single_quote_detected = False
+                        break
+                    self.next_char()
+                    self.char_num += 1
+                if (single_quote_detected):
+                    self.error.unmatching_singlequotes(self)
+                match_regex = self.recognize(buffer)
+                if (match_regex): self.linked_list_of_tokens.append((match_regex, buffer))
                 else: self.error.no_regex_match(self)
                 buffer = ''
             else:
@@ -687,11 +723,21 @@ class error_msg:
         print(f"No match was found for the above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
         exit(-1)
 
+    def unmatching_doublequotes(self, scanner_instance):
+        print(f"FILE TERMINATED WITHOUT CLOSING STRING '{scanner_instance.content[scanner_instance.content_index]}'")
+        print(f"No double quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
+        exit(-1)
+    
+    def unmatching_singlequotes(self, scanner_instance):
+        print(f"FILE TERMINATED WITHOUT CLOSING CHAR LITERAL '{scanner_instance.content[scanner_instance.content_index]}'")
+        print(f"No single quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
+        exit(-1)
+    
 
 if __name__ == '__main__':
     code = scanner("./src_code.txt", "./tokens.yaml")
-    # code.produce_automata()
+    code.produce_automata()
     # code.save_automata("tokens.pickle")
-    code.load_automata("./tokens.pickle")
+    # code.load_automata("./tokens.pickle")
     code.scan()
     print(code.linked_list_of_tokens)

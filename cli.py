@@ -7,3 +7,4 @@ def command_line_interpreter() -> dict:
     parser.add_argument('--debug', help="-debug <stage>")
     args = parser.parse_args()
     return args.__dict__
+
