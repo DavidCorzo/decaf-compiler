@@ -630,10 +630,7 @@ class scanner:
                 if buffer != '':
                     match_regex = self.recognize(buffer)
                     if (match_regex):
-                        if (match_regex == "<keyword>"):
-                            self.linked_list_of_tokens.append(buffer)
-                        else:
-                            self.linked_list_of_tokens.append((match_regex, buffer))
+                        self.linked_list_of_tokens.append((match_regex, buffer))
                     else:
                         self.error.no_regex_match(self)
                 buffer = ""
@@ -645,7 +642,7 @@ class scanner:
                     match_regex = self.recognize(buffer)
                     if match_regex: self.linked_list_of_tokens.append((match_regex, buffer))
                     else: self.error.no_regex_match(self)
-                self.linked_list_of_tokens.append(char)
+                self.linked_list_of_tokens.append(('<terminal>', char))
                 buffer = ''
             elif char in "<>=!+-*/":
                 symbol = char
@@ -657,38 +654,25 @@ class scanner:
                 if (match_regex): self.linked_list_of_tokens.append((match_regex, symbol))
                 else: self.error.no_regex_match(self)
                 buffer = ''
-            elif char in "\"":
+            elif char in "\"\'":
+                terminal = char
                 buffer += char
                 self.content_index += 1
                 double_quote_detected = True
                 while (self.content_index < len(self.content)):
                     char = self.content[self.content_index]
                     buffer += char
-                    if (char == '"'):
+                    if (char == terminal):
                         double_quote_detected = False
                         break
-                    self.next_char()
+                    elif (char == '\\'):
+                        self.content_index += 1
+                        char = self.content[self.content_index]
+                        buffer += char
+                    self.content_index += 1
                     self.char_num += 1
                 if (double_quote_detected):
                     self.error.unmatching_doublequotes(self)
-                match_regex = self.recognize(buffer)
-                if (match_regex): self.linked_list_of_tokens.append((match_regex, buffer))
-                else: self.error.no_regex_match(self)
-                buffer = ''
-            elif char in "'":
-                buffer += char
-                self.content_index += 1
-                single_quote_detected = True
-                while (self.content_index < len(self.content)):
-                    char = self.content[self.content_index]
-                    buffer += char
-                    if (char == '\''):
-                        single_quote_detected = False
-                        break
-                    self.next_char()
-                    self.char_num += 1
-                if (single_quote_detected):
-                    self.error.unmatching_singlequotes(self)
                 match_regex = self.recognize(buffer)
                 if (match_regex): self.linked_list_of_tokens.append((match_regex, buffer))
                 else: self.error.no_regex_match(self)
@@ -698,7 +682,7 @@ class scanner:
                     buffer += char
                 else:
                     self.error.illegal_character(self)
-            self.next_char()
+            self.content_index += 1
             self.char_num += 1
     
     def isascii(self, char):
