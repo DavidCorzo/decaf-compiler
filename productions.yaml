@@ -1,10 +1,38 @@
-<program>: "class Program '{' <field_decl>* <method_decl>* '}'"
+<program>: "class Program '{' <field_decl>* <method_decl>* '}'$"
 <field_decl>: "<type> { <id> | <id> '[' <int_literal> ']' }+, ;"
-<method_decl>: "{ <type> | void"
-<block>: "'{' <var_decl>* <statement>* '}'"
-<var_decl>: "<type> <id>+, ;"
+# <method_decl>: "<type_or_void> <id> '(' ( { <type> <id>}+,)? ')' <block>" CHANGED
+<type_or_void>: "<type>"
+<type_or_void>: "void"
+<type_id_plus>: "<type> <id>"
+<type_id_plus>: ""
+# <block>: "'{' <var_decl>* <statement>* '}'" CHANGED
+<block>: "'{' <var_declarations> <statements_kleene> '}'"
+<var_decl_kleene>: "<var_decl>"
+<var_decl_kleene>: null 
+<statements_kleene>: "<statement>"
+<statements_kleene>: null
+
+# <var_decl>: "<type> <id>+, ;" CHANGED
+<var_decl>: 
+  - "<type> <id_plus>, ;"
+<id_plus>: 
+  - 
+
 # <type> -> in lexer
-<statement>: "<location> <assign_op> <expr> ; | <method_call> ;| if '(' <expr> ')' <block> { else <block> } ? | for <id> = <expr>, <expr> <block> | return <expr> ? ;| break ;| continue ;| <block>"
+# <statement>: "<location> <assign_op> <expr> ; | <method_call> ;| if '(' <expr> ')' <block> { else <block> } ? | for <id> = <expr>, <expr> <block> | return <expr> ? ;| break ;| continue ;| <block>" CHANGED
+<statement>: 
+  - "<location> <assign_op> <expr> ;"
+  - "<method_call> ;"
+  - "if '(' <expr> ')' <block> <else_block>"
+  - "for <id> = <expr>, <expr> <block>"
+  - "return <expr> ? ;"
+  - "break ;"
+  - "continue ;"
+  - "<block>"
+  - null 
+<else_block>: 
+  - "else <block>"
+  - null
 # <assign_op> -> in lexer
 <method_call>: "<method_name> '(' [ <expr>* ] ')'"
 <method_name>: "<id>"
