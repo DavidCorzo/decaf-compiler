@@ -1,5 +1,4 @@
-from os import close
-from types import FrameType
+from functools import lru_cache
 from typing import OrderedDict
 from yaml import safe_load
 import re
@@ -61,11 +60,11 @@ class parsing_automaton:
         self.item_closures = {}
         self.accept_items = set()
         self.closure_table = {}
-        self.closures()
-        self.create_states()
-        # functionality for closure
+        self.closures_to_states = dict()
         self.state = None
         self.productions_processed = None
+        self.closures()
+        self.create_states()
     
     def closures(self):
         for item_index in items.keys():
@@ -74,6 +73,7 @@ class parsing_automaton:
             self.get_closure_of_an_item(set([item_index]))
             self.closure_table[item_index] = self.state
 
+    # @lru_cache(maxsize=None)
     def get_closure_of_an_item(self, set_of_indexes):
         self.state |= set_of_indexes
         actual_items = set()
@@ -100,17 +100,42 @@ class parsing_automaton:
     
     def create_states(self):
         self.create_state(set([0]))
+        print("states:")
+        for k,v in self.states.items():
+            print(k, ':', v)
+        print("closure to states:")
+        for k,v in self.closures_to_states.items():
+            print(k, ':', v)
+        # print(f"states={self.states}")
+        # print(f"closures_to_states={self.closures_to_states}")
+    
+    # S0	0,2,6,8,13
+    # s1	1,3
+    # s2	4,8,13
+    # s3	5,
+    # s4	9,14
+    # s5	2,6,8,10,13
+    # s6	3,11
+    # s7	12,
+    # s8	7,
         
     def create_state(self, set_of_items):
         closure_of_items = set()
         for coi in set_of_items:
             closure_of_items |= self.closure_table[coi]
-        state_key = sorted(tuple(closure_of_items))
+        items_tuple = tuple(sorted(set_of_items))
+        state_key = tuple(sorted(closure_of_items))
         actual_items = set()
+        if not self.closures_to_states.get(items_tuple):
+            # register that we are going to calculate this in this iteration.
+            self.closures_to_states[items_tuple] = state_key
+        else: 
+            # this pair of items has already been calculated
+            return self.closures_to_states[items_tuple]
         for ai in closure_of_items:
             actual_items.add(items[ai])
-        # if not self.states.get(state_key):
-        #     self.states[state_key] = dict()
+        if self.states.get(state_key):
+            return state_key
         transitions = dict()
         for item in actual_items:
             lhs = item[LHS]
@@ -123,12 +148,35 @@ class parsing_automaton:
                         transitions[after_dot].add(reverse_item[item])
                     else:
                         transitions[after_dot] = set([reverse_item[item]])
+        # advance by one all the transitions. 
+        # if this is not done there is infinite recursion.
+        for transition, item_set in transitions.items():
+            next_items = set()
+            for it in item_set:
+                advanced_by_one = self.advance_dot_by_one(it)
+                if advanced_by_one:
+                    next_items.add(advanced_by_one)
+            transitions[transition] = tuple(sorted(next_items))
+        print("", end='')
+        # base case is when transitions are 0.
         if len(transitions) == 0:
             return state_key
         else:
+            if self.states.get(state_key):
+                # print(self.states[state_key])
+                for transition, new_state in transitions.items():
+                    if self.states[state_key].get(transition):
+                        self.states[state_key][transition] |= new_state
+            else:
+                self.states[state_key] = transitions
             for transition, new_state in self.states[state_key].items():
-                print(new_state)
-                # self.states[state_key] = self.create_state(new_state)
+                possible_state_key = tuple(sorted(new_state))
+                if possible_state_key not in self.closures_to_states.keys():
+                    # print(f"closures_to_states={self.closures_to_states}")
+                    state = self.create_state(new_state)
+                # else:
+                #     state = self.closures_to_states[possible_state_key]
+                # self.states[state_key][transition] = state
         
     # def get_closures(self):
     #     print(self.get_closure_of_item({3}))
@@ -188,14 +236,23 @@ class parsing_automaton:
     #     if not self.states.get(tuple(sorted(state))):
     #         self.states[tuple(sorted(state))] = set()
     
-    # def advance_dot_by_one(self, item):
-    #     lhs = item[LHS]
-    #     rhs = list(item[RHS:])
-    #     dot_pos = rhs.index('•')
-    #     if (dot_pos != (len(rhs) - 1)):
-    #         rhs.pop(dot_pos)
-    #         rhs.insert(dot_pos + 1, '•')
-
+    def advance_dot_by_one(self, item_index):
+        item = items[item_index]
+        lhs = item[LHS]
+        rhs = list(item[RHS:])
+        dot_pos = rhs.index('•')
+        if (dot_pos + 1) < len(rhs):
+            after_dot = rhs[dot_pos + 1]
+            if after_dot == '$':
+                return None
+            else:
+                item = list(item)
+                dot_pos = item.index('•')
+                item.remove('•')
+                item.insert(dot_pos + 1, '•')
+                return reverse_item[tuple(item)]
+        else:
+            return None
     
     # def get_edge(self, item):
     #     lhs = item[LHS]
