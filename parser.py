@@ -20,8 +20,8 @@ def num_label_maker() -> int:
 
 label_gen = num_label_maker()
 
-start_production = '<S>'
-productions_filename = 'example.yaml'
+start_production = '<P>'
+productions_filename = 'G_10.yaml'
 with open(productions_filename) as file:
     grammar_rules = safe_load(file)
     items = {}
@@ -41,8 +41,7 @@ with open(productions_filename) as file:
             r2.insert(0, '•')
     for r1, r2 in closed_rules.items():
         closed_rules[r1] = [tuple([r1] + x) for x in closed_rules[r1]]
-    # for k,v in reverse_item.items():
-    #     print(k, v)
+    closed_indexes = {k:set([reverse_item[x] for x in v]) for k,v in closed_rules.items()}
     file.close()
 
 @dataclass(repr=True)
@@ -60,113 +59,167 @@ class parsing_automaton:
     def __init__(self):
         self.states = {}
         self.item_closures = {}
-        self.get_closures()
-        # state = self.get_closure(set([0]))
-        # print(f"state={state}")
-        # self.add_new_state(state)
-        # print(self.states)
-        # self.compute_edges(state)
-        # ('<P>', '•', '<E>', '$') 0
-        # ('<P>', '<E>', '•', '$') 1
-        # ('<P>', '<E>', '$', '•') 2
-        # ('<E>', '•', '<E>', '+', '<T>') 3
-        # ('<E>', '<E>', '•', '+', '<T>') 4
-        # ('<E>', '<E>', '+', '•', '<T>') 5
-        # ('<E>', '<E>', '+', '<T>', '•') 6
-        # ('<E>', '•', '<T>') 7
-        # ('<E>', '<T>', '•') 8
-        # ('<T>', '•', 'id', '(', '<E>', ')') 9
-        # ('<T>', 'id', '•', '(', '<E>', ')') 10
-        # ('<T>', 'id', '(', '•', '<E>', ')') 11
-        # ('<T>', 'id', '(', '<E>', '•', ')') 12
-        # ('<T>', 'id', '(', '<E>', ')', '•') 13
-        # ('<T>', '•', 'id') 14
-        # ('<T>', 'id', '•') 15
+        self.accept_items = set()
+        self.closure_table = {}
+        self.closures()
+        self.create_states()
+        # functionality for closure
+        self.state = None
+        self.productions_processed = None
     
-    def get_closures(self):
-        for index, production in items.items():
-            self.item_closures[index] = self.get_closure(production)
-        for k,v in self.item_closures.items():
-            print(k,v)
-    
-    def index_to_items(self, set_of_indexes):
+    def closures(self):
+        for item_index in items.keys():
+            self.state = set()
+            self.productions_processed = set([start_production])
+            self.get_closure_of_an_item(set([item_index]))
+            self.closure_table[item_index] = self.state
+
+    def get_closure_of_an_item(self, set_of_indexes):
+        self.state |= set_of_indexes
         actual_items = set()
-        for item in set_of_indexes:
-            actual_items.add(items[item])
-        return actual_items
-    
-    def find_pending_add(self, set_items, already_visited) -> set():
-        pending_add = set()
-        for it in set_items:
-            lhs = it[LHS]
-            rhs = it[RHS:]
+        for ai in set_of_indexes:
+            actual_items.add(items[ai])
+        pending_productions = set()
+        for item in actual_items:
+            lhs = item[LHS]
+            rhs = item[RHS:]
+            accept = ('$' in rhs)
             dot_pos = rhs.index('•')
             if (dot_pos + 1) < len(rhs):
                 after_dot = rhs[dot_pos + 1]
                 if is_nonterminal(after_dot):
-                    pending_add.add(after_dot)
-        # print(already_visited)
-        pending_add.difference_update(already_visited)
-        # print(pending_add)
-        return pending_add
+                    pending_productions.add(after_dot)
+        if len(pending_productions) == 0:
+            return
+        pending_items = set()
+        for production in pending_productions:
+            if production not in self.productions_processed:
+                pending_items |= closed_indexes[production]
+                self.productions_processed.add(production)
+        self.get_closure_of_an_item(pending_items)
     
-    def get_closure(self, set_of_indexes, state_items=None, already_visited=None):
-        if not state_items:
-            state_items = set()
-        state_items |= set_of_indexes
-        actual_items = self.index_to_items(set_of_indexes)
-        if already_visited == None:
-            already_visited = set()
-        pending_add = self.find_pending_add(actual_items, already_visited)
-        for ai in actual_items:
-            already_visited.add(ai[0])
-        if len(pending_add) == 0:
-            return state_items
-        for pa in pending_add:
-            if pa not in already_visited:
-                rules = closed_rules[pa]
-                pending_recursion = set()
-                for r in rules:
-                    it_index = reverse_item[r]
-                    pending_recursion.add(it_index)
-        return self.get_closure(pending_recursion, state_items, already_visited)
+    def create_states(self):
+        self.create_state(set([0]))
         
-    def add_new_state(self, state):
-        if not self.states.get(tuple(sorted(state))):
-            self.states[tuple(sorted(state))] = set()
+    def create_state(self, set_of_items):
+        closure_of_items = set()
+        for coi in set_of_items:
+            closure_of_items |= self.closure_table[coi]
+        state_key = sorted(tuple(closure_of_items))
+        actual_items = set()
+        for ai in closure_of_items:
+            actual_items.add(items[ai])
+        # if not self.states.get(state_key):
+        #     self.states[state_key] = dict()
+        transitions = dict()
+        for item in actual_items:
+            lhs = item[LHS]
+            rhs = item[RHS:]
+            dot_pos = rhs.index('•')
+            if (dot_pos + 1) < len(rhs):
+                after_dot = rhs[dot_pos + 1]
+                if (after_dot != '$'):
+                    if transitions.get(after_dot):
+                        transitions[after_dot].add(reverse_item[item])
+                    else:
+                        transitions[after_dot] = set([reverse_item[item]])
+        if len(transitions) == 0:
+            return state_key
+        else:
+            for transition, new_state in self.states[state_key].items():
+                print(new_state)
+                # self.states[state_key] = self.create_state(new_state)
+        
+    # def get_closures(self):
+    #     print(self.get_closure_of_item({3}))
+    #     # for index in items.keys():
+    #     #     self.item_closures[index] = self.get_closure_of_item(index)
+    #     # for k,v in self.item_closures.items():
+    #     #     print(k,v)                
     
-    def advance_dot_by_one(self, item):
-        lhs = item[LHS]
-        rhs = list(item[RHS:])
-        dot_pos = rhs.index('•')
-        if (dot_pos != (len(rhs) - 1)):
-            rhs.pop(dot_pos)
-            rhs.insert(dot_pos + 1, '•')
+    # def index_to_items(self, set_of_indexes):
+    #     actual_items = set()
+    #     for item in set_of_indexes:
+    #         actual_items.add(items[item])
+    #     return actual_items
+    
+    # def find_pending_add(self, set_items, already_visited) -> set():
+    #     pending_add = set()
+    #     for it in set_items:
+    #         lhs = it[LHS]
+    #         rhs = it[RHS:]
+    #         dot_pos = rhs.index('•')
+    #         if (dot_pos + 1) < len(rhs):
+    #             after_dot = rhs[dot_pos + 1]
+    #             if is_nonterminal(after_dot):
+    #                 print(it)
+    #                 exit()
+    #                 for item in closed_rules[it]:
+    #                     pending_add.add(item)
+    #     print(already_visited)
+    #     pending_add.difference_update(already_visited)
+    #     print(pending_add)
+    #     exit()
+    #     return pending_add
+        
+    
+    # def get_closure_of_item(self, set_of_indexes, state_items=None, already_visited=None):
+    #     if not state_items:
+    #         state_items = set()
+    #     state_items |= set_of_indexes
+    #     actual_items = self.index_to_items(set_of_indexes)
+    #     if already_visited == None:
+    #         already_visited = set()
+    #     pending_add = self.find_pending_add(actual_items, already_visited)
+    #     for ai in actual_items:
+    #         already_visited.add(reverse_item[ai])
+    #     if len(pending_add) == 0:
+    #         return state_items
+    #     for pa in pending_add:
+    #         if pa not in already_visited:
+    #             rules = closed_rules[pa]
+    #             pending_recursion = set()
+    #             for r in rules:
+    #                 it_index = reverse_item[r]
+    #                 pending_recursion.add(it_index)
+    #     return self.get_closure_of_item(pending_recursion, state_items, already_visited)
+        
+    # def add_new_state(self, state):
+    #     if not self.states.get(tuple(sorted(state))):
+    #         self.states[tuple(sorted(state))] = set()
+    
+    # def advance_dot_by_one(self, item):
+    #     lhs = item[LHS]
+    #     rhs = list(item[RHS:])
+    #     dot_pos = rhs.index('•')
+    #     if (dot_pos != (len(rhs) - 1)):
+    #         rhs.pop(dot_pos)
+    #         rhs.insert(dot_pos + 1, '•')
 
     
-    def get_edge(self, item):
-        lhs = item[LHS]
-        rhs = item[RHS:]
-        dot_pos = rhs.index('•')
-        if (dot_pos + 1) < len(rhs):
-            return rhs[dot_pos + 1]
-        return None
+    # def get_edge(self, item):
+    #     lhs = item[LHS]
+    #     rhs = item[RHS:]
+    #     dot_pos = rhs.index('•')
+    #     if (dot_pos + 1) < len(rhs):
+    #         return rhs[dot_pos + 1]
+    #     return None
     
-    def get_edges(self, item_set):
-        transitions = set()
-        for it in item_set:
-            t = self.get_edge(it)
-            if (t):
-                transitions.add(t)
-        return transitions
+    # def get_edges(self, item_set):
+    #     transitions = set()
+    #     for it in item_set:
+    #         t = self.get_edge(it)
+    #         if (t):
+    #             transitions.add(t)
+    #     return transitions
 
-    def compute_edges(self, state):
-        # state is the key in the states dictionary
-        actual_items = self.index_to_items(state)
-        transitions = self.get_edges(actual_items)
-        # for ai in actual_items:
-        #     pass
-        print(f"trans={transitions}")
+    # def compute_edges(self, state):
+    #     # state is the key in the states dictionary
+    #     actual_items = self.index_to_items(state)
+    #     transitions = self.get_edges(actual_items)
+    #     # for ai in actual_items:
+    #     #     pass
+    #     print(f"trans={transitions}")
             
 
 
