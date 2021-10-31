@@ -6,70 +6,57 @@ from dataclasses import dataclass
 from copy import deepcopy
 
 def is_nonterminal(string):
+    if string == None: return False
     return bool(re.match("<(.*)>", string))
 
-def num_label_maker() -> int:
-    """
-    Generador para poder generar estados únicos. Usados en estados de nfa.
-    """
-    num = 0
-    while True:
-        yield num
-        num += 1
-
-label_gen = num_label_maker()
-
-start_production = '<P>'
-productions_filename = 'G_10.yaml'
-with open(productions_filename) as file:
-    grammar_rules = safe_load(file)
-    items = {}
-    index = 0
-    for lhs, rhs_l in grammar_rules.items():
-        offset = int(bool(lhs != start_production))
-        for rhs in rhs_l:
-            for index_marker in range(len(rhs) + offset):
-                rhs_item = rhs.copy()
-                rhs_item.insert(index_marker, '•')
-                items.update({index : tuple([lhs] + rhs_item)})
-                index += 1
-    reverse_item = {v:k for k,v in items.items()}
-    closed_rules = grammar_rules.copy()
-    for r1 in closed_rules.values():
-        for r2 in r1:
-            r2.insert(0, '•')
-    for r1, r2 in closed_rules.items():
-        closed_rules[r1] = [tuple([r1] + x) for x in closed_rules[r1]]
-    closed_indexes = {k:set([reverse_item[x] for x in v]) for k,v in closed_rules.items()}
-    file.close()
-
-@dataclass(repr=True)
-class p_state:
-    def __init__(self, items_i, transitions):
-        self.items_i = items_i
-        self.transitions = transitions
-    def __repr__(self) -> str:
-        return f"(items={self.items_i}, trans={self.transitions})"
-    def __str__(self) -> str:
-        return f"(items={self.items_i}, trans={self.transitions})"
+# def none_to_epsilon(element):
+#     if (element == None): return 'ε'
+#     else: return element
 
 LHS, RHS = 0, 1
-class parsing_automaton:
-    def __init__(self):
+class lr_0:
+    def __init__(self, start_production, productions_filename):
+        self.start_production = start_production
+        self.productions_filename = productions_filename
+        self.grammar_rules = self.items = self.reverse_item = self.closed_indexes = self.closed_rules = None
+        self.load_grammar()
+        # class attributes
         self.states = {}
         self.item_closures = {}
         self.accept_items = set()
         self.closure_table = {}
         self.closures_to_states = dict()
-        self.state = None
-        self.productions_processed = None
+        self.state = self.productions_processed = None
         self.closures()
         self.create_states()
     
+    def load_grammar(self):
+        with open(self.productions_filename) as file:
+            self.grammar_rules = safe_load(file)
+            self.items = {}
+            index = 0
+            for lhs, rhs_l in self.grammar_rules.items():
+                offset = int(bool(lhs != self.start_production))
+                for rhs in rhs_l:
+                    for index_marker in range(len(rhs) + offset):
+                        rhs_item = rhs.copy()
+                        rhs_item.insert(index_marker, '•')
+                        self.items.update({index : tuple([lhs] + rhs_item)})
+                        index += 1
+            self.reverse_item = {v:k for k,v in self.items.items()}
+            self.closed_rules = deepcopy(self.grammar_rules)
+            for r1 in self.closed_rules.values():
+                for r2 in r1:
+                    r2.insert(0, '•')
+            for r1, r2 in self.closed_rules.items():
+                self.closed_rules[r1] = [tuple([r1] + x) for x in self.closed_rules[r1]]
+            self.closed_indexes = {k:set([self.reverse_item[x] for x in v]) for k,v in self.closed_rules.items()}
+            file.close()
+    
     def closures(self):
-        for item_index in items.keys():
+        for item_index in self.items.keys():
             self.state = set()
-            self.productions_processed = set([start_production])
+            self.productions_processed = set([self.start_production])
             self.get_closure_of_an_item(set([item_index]))
             self.closure_table[item_index] = self.state
 
@@ -78,46 +65,33 @@ class parsing_automaton:
         self.state |= set_of_indexes
         actual_items = set()
         for ai in set_of_indexes:
-            actual_items.add(items[ai])
+            actual_items.add(self.items[ai])
         pending_productions = set()
         for item in actual_items:
             lhs = item[LHS]
             rhs = item[RHS:]
-            accept = ('$' in rhs)
+            # accept = ('$' in rhs)
             dot_pos = rhs.index('•')
             if (dot_pos + 1) < len(rhs):
                 after_dot = rhs[dot_pos + 1]
                 if is_nonterminal(after_dot):
-                    pending_productions.add(after_dot)
+                    pending_productions.add(after_dot) 
         if len(pending_productions) == 0:
             return
         pending_items = set()
         for production in pending_productions:
             if production not in self.productions_processed:
-                pending_items |= closed_indexes[production]
+                pending_items |= self.closed_indexes[production]
                 self.productions_processed.add(production)
         self.get_closure_of_an_item(pending_items)
     
     def create_states(self):
         self.create_state(set([0]))
-        print("states:")
-        for k,v in self.states.items():
-            print(k, ':', v)
-        print("closure to states:")
-        for k,v in self.closures_to_states.items():
-            print(k, ':', v)
-        # print(f"states={self.states}")
-        # print(f"closures_to_states={self.closures_to_states}")
-    
-    # S0	0,2,6,8,13
-    # s1	1,3
-    # s2	4,8,13
-    # s3	5,
-    # s4	9,14
-    # s5	2,6,8,10,13
-    # s6	3,11
-    # s7	12,
-    # s8	7,
+        for state, transitions in self.states.items():
+            for token, unclosed_state in transitions.items():
+                self.states[state][token] = self.closures_to_states[unclosed_state]
+        # for k,v in self.states.items():
+        #     print(k, ':', v)
         
     def create_state(self, set_of_items):
         closure_of_items = set()
@@ -125,15 +99,15 @@ class parsing_automaton:
             closure_of_items |= self.closure_table[coi]
         items_tuple = tuple(sorted(set_of_items))
         state_key = tuple(sorted(closure_of_items))
-        actual_items = set()
         if not self.closures_to_states.get(items_tuple):
             # register that we are going to calculate this in this iteration.
             self.closures_to_states[items_tuple] = state_key
         else: 
             # this pair of items has already been calculated
             return self.closures_to_states[items_tuple]
+        actual_items = set()
         for ai in closure_of_items:
-            actual_items.add(items[ai])
+            actual_items.add(self.items[ai])
         if self.states.get(state_key):
             return state_key
         transitions = dict()
@@ -145,9 +119,9 @@ class parsing_automaton:
                 after_dot = rhs[dot_pos + 1]
                 if (after_dot != '$'):
                     if transitions.get(after_dot):
-                        transitions[after_dot].add(reverse_item[item])
+                        transitions[after_dot].add(self.reverse_item[item])
                     else:
-                        transitions[after_dot] = set([reverse_item[item]])
+                        transitions[after_dot] = set([self.reverse_item[item]])
         # advance by one all the transitions. 
         # if this is not done there is infinite recursion.
         for transition, item_set in transitions.items():
@@ -157,17 +131,18 @@ class parsing_automaton:
                 if advanced_by_one:
                     next_items.add(advanced_by_one)
             transitions[transition] = tuple(sorted(next_items))
-        print("", end='')
+        # print("", end='')
         # base case is when transitions are 0.
         if len(transitions) == 0:
             return state_key
         else:
-            if self.states.get(state_key):
-                # print(self.states[state_key])
-                for transition, new_state in transitions.items():
-                    if self.states[state_key].get(transition):
-                        self.states[state_key][transition] |= new_state
-            else:
+            # if self.states.get(state_key):
+            #     # print(self.states[state_key])
+            #     for transition, new_state in transitions.items():
+            #         if self.states[state_key].get(transition):
+            #             self.states[state_key][transition] |= new_state
+            # else:
+            if not (self.states.get(state_key)):
                 self.states[state_key] = transitions
             for transition, new_state in self.states[state_key].items():
                 possible_state_key = tuple(sorted(new_state))
@@ -177,67 +152,9 @@ class parsing_automaton:
                 # else:
                 #     state = self.closures_to_states[possible_state_key]
                 # self.states[state_key][transition] = state
-        
-    # def get_closures(self):
-    #     print(self.get_closure_of_item({3}))
-    #     # for index in items.keys():
-    #     #     self.item_closures[index] = self.get_closure_of_item(index)
-    #     # for k,v in self.item_closures.items():
-    #     #     print(k,v)                
-    
-    # def index_to_items(self, set_of_indexes):
-    #     actual_items = set()
-    #     for item in set_of_indexes:
-    #         actual_items.add(items[item])
-    #     return actual_items
-    
-    # def find_pending_add(self, set_items, already_visited) -> set():
-    #     pending_add = set()
-    #     for it in set_items:
-    #         lhs = it[LHS]
-    #         rhs = it[RHS:]
-    #         dot_pos = rhs.index('•')
-    #         if (dot_pos + 1) < len(rhs):
-    #             after_dot = rhs[dot_pos + 1]
-    #             if is_nonterminal(after_dot):
-    #                 print(it)
-    #                 exit()
-    #                 for item in closed_rules[it]:
-    #                     pending_add.add(item)
-    #     print(already_visited)
-    #     pending_add.difference_update(already_visited)
-    #     print(pending_add)
-    #     exit()
-    #     return pending_add
-        
-    
-    # def get_closure_of_item(self, set_of_indexes, state_items=None, already_visited=None):
-    #     if not state_items:
-    #         state_items = set()
-    #     state_items |= set_of_indexes
-    #     actual_items = self.index_to_items(set_of_indexes)
-    #     if already_visited == None:
-    #         already_visited = set()
-    #     pending_add = self.find_pending_add(actual_items, already_visited)
-    #     for ai in actual_items:
-    #         already_visited.add(reverse_item[ai])
-    #     if len(pending_add) == 0:
-    #         return state_items
-    #     for pa in pending_add:
-    #         if pa not in already_visited:
-    #             rules = closed_rules[pa]
-    #             pending_recursion = set()
-    #             for r in rules:
-    #                 it_index = reverse_item[r]
-    #                 pending_recursion.add(it_index)
-    #     return self.get_closure_of_item(pending_recursion, state_items, already_visited)
-        
-    # def add_new_state(self, state):
-    #     if not self.states.get(tuple(sorted(state))):
-    #         self.states[tuple(sorted(state))] = set()
     
     def advance_dot_by_one(self, item_index):
-        item = items[item_index]
+        item = self.items[item_index]
         lhs = item[LHS]
         rhs = list(item[RHS:])
         dot_pos = rhs.index('•')
@@ -250,36 +167,91 @@ class parsing_automaton:
                 dot_pos = item.index('•')
                 item.remove('•')
                 item.insert(dot_pos + 1, '•')
-                return reverse_item[tuple(item)]
+                return self.reverse_item[tuple(item)]
         else:
             return None
+
+SHIFT, REDUCE, GOTO = 0, 1, 2
+class slr:
+    def __init__(self, lr_0_assembled:lr_0):
+        self.grammar_rules = lr_0_assembled.grammar_rules
+        self.states = lr_0_assembled.states
+        self.start_production = lr_0_assembled.start_production
+        self.slr_parsing_table = {}
+        self.firsts_of_lhs = {}
+        self.follow_of_lhs = {}
+        self.first_of_current = None
+        self.current = None
+        self.firsts()
+        self.follows()
     
-    # def get_edge(self, item):
-    #     lhs = item[LHS]
-    #     rhs = item[RHS:]
-    #     dot_pos = rhs.index('•')
-    #     if (dot_pos + 1) < len(rhs):
-    #         return rhs[dot_pos + 1]
-    #     return None
+    def firsts(self):
+        for lhs in self.grammar_rules.keys():
+            self.calculate_feasable_first(lhs)
+        pending_firsts = set(self.grammar_rules.keys()) - set(self.firsts_of_lhs.keys())
+        for lhs in pending_firsts:
+            self.first_of_current = set()
+            self.current = lhs
+            for rhs in range(len(self.grammar_rules[lhs])):
+                self.calculate_first(lhs, rhs)
+            if self.firsts_of_lhs.get(lhs):
+                self.firsts_of_lhs[lhs] |= self.first_of_current
+            else:
+                self.firsts_of_lhs[lhs] = self.first_of_current
+        print(self.firsts_of_lhs)
+
+    def calculate_first(self, lhs, rhs_i, index_of_token=0):
+        # dummy = self.first_of_current
+        first = self.grammar_rules[lhs][rhs_i][index_of_token]
+        if not is_nonterminal(first):
+            self.first_of_current.add(first)
+            return
+        rhs_list = self.grammar_rules[first]
+        for rhs_next in range(len(rhs_list)):
+            self.calculate_first(first, rhs_next)
+        if None in self.first_of_current:
+            if (index_of_token + 1) < len(self.grammar_rules[lhs][rhs_i]):
+                if (self.grammar_rules[lhs][rhs_i][index_of_token + 1] == '$'):
+                    return
+                self.first_of_current.remove(None)
+                self.calculate_first(lhs, rhs_i, index_of_token + 1)
+            else: 
+                return
+
+    # def calculate_first(self, lhs, index_of_token=0):
+    #     dummy = self.first_of_current
+    #     non_terminals_pending = set()
+    #     for rhs_list in self.grammar_rules[lhs]:
+    #         if is_nonterminal(rhs_list[index_of_token]):
+    #             non_terminals_pending.add(rhs_list[index_of_token])
+    #         else:
+    #             self.first_of_current.add(rhs_list[index_of_token])
+    #     for ntp in non_terminals_pending:
+    #         if (self.firsts_of_lhs.get(ntp)):
+    #             self.first_of_current |= self.firsts_of_lhs[ntp]
+    #         else:
+    #             self.calculate_first(ntp, index_of_token)
+    #     if lhs != self.current:
+    #         return
+    #     if (None in self.first_of_current):
+    #         rule = self.grammar_rules[lhs]
+    #         for r in rule:
+
     
-    # def get_edges(self, item_set):
-    #     transitions = set()
-    #     for it in item_set:
-    #         t = self.get_edge(it)
-    #         if (t):
-    #             transitions.add(t)
-    #     return transitions
+    def calculate_feasable_first(self, lhs):
+        non_terminals = set()
+        for rhs_list in self.grammar_rules[lhs]:
+            if is_nonterminal(rhs_list[0]):
+                return 
+            else: 
+                non_terminals.add(rhs_list[0])
+        self.firsts_of_lhs[lhs] = non_terminals
 
-    # def compute_edges(self, state):
-    #     # state is the key in the states dictionary
-    #     actual_items = self.index_to_items(state)
-    #     transitions = self.get_edges(actual_items)
-    #     # for ai in actual_items:
-    #     #     pass
-    #     print(f"trans={transitions}")
-            
+    def follows(self):
+        pass
+    
+    def follow(self):
+        pass
 
-
-        
-
-p = parsing_automaton()
+p = lr_0('<P>', 'tutorial_point.yaml')
+s = slr(p)

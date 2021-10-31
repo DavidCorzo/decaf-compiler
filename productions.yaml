@@ -1,4 +1,7 @@
-<program>: "class Program '{' <field_decl>* <method_decl>* '}'$"
+<program>: 
+  - ['<program´>', '$']
+<program´>: 
+  - ['class', 'Program', '{', '<field_decl>*', '<method_decl>*', '}']
 <field_decl>: "<type> { <id> | <id> '[' <int_literal> ']' }+, ;"
 # <method_decl>: "<type_or_void> <id> '(' ( { <type> <id>}+,)? ')' <block>" CHANGED
 <type_or_void>: "<type>"
