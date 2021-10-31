@@ -198,17 +198,21 @@ class slr:
                 self.firsts_of_lhs[lhs] |= self.first_of_current
             else:
                 self.firsts_of_lhs[lhs] = self.first_of_current
-        print(self.firsts_of_lhs)
+        # print(self.firsts_of_lhs)
 
     def calculate_first(self, lhs, rhs_i, index_of_token=0):
-        # dummy = self.first_of_current
+        dummy1 = self.firsts_of_lhs
+        dummy2 = self.first_of_current
         first = self.grammar_rules[lhs][rhs_i][index_of_token]
         if not is_nonterminal(first):
             self.first_of_current.add(first)
             return
         rhs_list = self.grammar_rules[first]
         for rhs_next in range(len(rhs_list)):
-            self.calculate_first(first, rhs_next)
+            if self.firsts_of_lhs.get(first):
+                self.first_of_current |= self.firsts_of_lhs[first]
+            else:
+                self.calculate_first(first, rhs_next)
         if None in self.first_of_current:
             if (index_of_token + 1) < len(self.grammar_rules[lhs][rhs_i]):
                 if (self.grammar_rules[lhs][rhs_i][index_of_token + 1] == '$'):
@@ -217,26 +221,6 @@ class slr:
                 self.calculate_first(lhs, rhs_i, index_of_token + 1)
             else: 
                 return
-
-    # def calculate_first(self, lhs, index_of_token=0):
-    #     dummy = self.first_of_current
-    #     non_terminals_pending = set()
-    #     for rhs_list in self.grammar_rules[lhs]:
-    #         if is_nonterminal(rhs_list[index_of_token]):
-    #             non_terminals_pending.add(rhs_list[index_of_token])
-    #         else:
-    #             self.first_of_current.add(rhs_list[index_of_token])
-    #     for ntp in non_terminals_pending:
-    #         if (self.firsts_of_lhs.get(ntp)):
-    #             self.first_of_current |= self.firsts_of_lhs[ntp]
-    #         else:
-    #             self.calculate_first(ntp, index_of_token)
-    #     if lhs != self.current:
-    #         return
-    #     if (None in self.first_of_current):
-    #         rule = self.grammar_rules[lhs]
-    #         for r in rule:
-
     
     def calculate_feasable_first(self, lhs):
         non_terminals = set()
@@ -253,5 +237,5 @@ class slr:
     def follow(self):
         pass
 
-p = lr_0('<P>', 'tutorial_point.yaml')
+p = lr_0('<S´>', 'example.yaml')
 s = slr(p)
