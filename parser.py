@@ -7,7 +7,7 @@ from copy import deepcopy
 
 def is_nonterminal(string):
     if string == None: return False
-    return bool(re.match("<(.*)>", string))
+    return ((string[0] == '<') and (string[-1] == '>')) # bool(re.match("<(.*)>", string))
 
 # def none_to_epsilon(element):
 #     if (element == None): return 'ε'
@@ -178,9 +178,10 @@ class slr:
         self.states = lr_0_assembled.states
         self.start_production = lr_0_assembled.start_production
         self.slr_parsing_table = {}
-        self.firsts_of_lhs = {}
-        self.follow_of_lhs = {}
+        self.firsts_table = {}
+        self.follow_table = {}
         self.first_of_current = None
+        self.follow_pending_stack = set()
         self.current = None
         self.firsts()
         self.follows()
@@ -188,29 +189,29 @@ class slr:
     def firsts(self):
         for lhs in self.grammar_rules.keys():
             self.calculate_feasable_first(lhs)
-        pending_firsts = set(self.grammar_rules.keys()) - set(self.firsts_of_lhs.keys())
+        pending_firsts = set(self.grammar_rules.keys()) - set(self.firsts_table.keys())
         for lhs in pending_firsts:
             self.first_of_current = set()
             self.current = lhs
-            for rhs in range(len(self.grammar_rules[lhs])):
-                self.calculate_first(lhs, rhs)
-            if self.firsts_of_lhs.get(lhs):
-                self.firsts_of_lhs[lhs] |= self.first_of_current
+            for rhs_i in range(len(self.grammar_rules[lhs])):
+                self.calculate_first(lhs, rhs_i)
+            if self.firsts_table.get(lhs):
+                self.firsts_table[lhs] |= self.first_of_current
             else:
-                self.firsts_of_lhs[lhs] = self.first_of_current
-        # print(self.firsts_of_lhs)
+                self.firsts_table[lhs] = self.first_of_current
+        # print(self.firsts_table)
 
     def calculate_first(self, lhs, rhs_i, index_of_token=0):
-        dummy1 = self.firsts_of_lhs
-        dummy2 = self.first_of_current
+        # dummy1 = self.firsts_table
+        # dummy2 = self.first_of_current
         first = self.grammar_rules[lhs][rhs_i][index_of_token]
         if not is_nonterminal(first):
             self.first_of_current.add(first)
             return
         rhs_list = self.grammar_rules[first]
         for rhs_next in range(len(rhs_list)):
-            if self.firsts_of_lhs.get(first):
-                self.first_of_current |= self.firsts_of_lhs[first]
+            if self.firsts_table.get(first):
+                self.first_of_current |= self.firsts_table[first]
             else:
                 self.calculate_first(first, rhs_next)
         if None in self.first_of_current:
@@ -229,13 +230,122 @@ class slr:
                 return 
             else: 
                 non_terminals.add(rhs_list[0])
-        self.firsts_of_lhs[lhs] = non_terminals
+        self.firsts_table[lhs] = non_terminals
 
     def follows(self):
-        pass
+        # follow operation can only be done on non-terminals
+        self.follow_table = {lhs:set() for lhs in self.grammar_rules.keys()}
+        self.follow_table[self.start_production].add('$')
+        for lhs, rhs_list in self.grammar_rules.items():
+            for rhs in rhs_list:
+                for rhs_element in range(len(rhs)):
+                    self.calculate_follow(lhs, rhs, rhs_element)
+        self.make_pending_follows()
+        print(self.follow_table)
+        # print(self.follow_table)
+        # for lhs, rhs_list in self.grammar_rules.items():
+        #     self.follow_of_current = set()
+        #     for rhs_i in range(len(rhs_list)):
+        #         self.follow(lhs, rhs_i)
+        #         print(self.follow_of_current)
+        #         exit()
     
-    def follow(self):
-        pass
+    def is_nullable(self, production):
+        return None in self.firsts_table[production]
+    
+    def first_sequence(self, b,  beta):
+        for beta_production in beta:
+            if is_nonterminal(beta_production):
+                self.follow_table[b] |= (deepcopy(self.firsts_table[beta_production]) - {None})
+                if not self.is_nullable(beta_production):
+                    break
+            else:
+                self.follow_table[b].add(beta_production)
+
+    def calculate_follow(self, lhs, rhs, rhs_index):
+        b = rhs[rhs_index]
+        if not is_nonterminal(b): return
+        beta = None
+        if (rhs_index + 1) < len(rhs):
+            beta = rhs[rhs_index + 1:]
+
+        if beta:
+            self.first_sequence(b, beta)
+        print(self.follow_table)
+
+        contains_epsilon = None in self.follow_table[b]
+        if contains_epsilon or (beta == None):
+            if b != lhs:
+                self.follow_pending_stack.add((b, lhs))
+
+    def make_pending_follows(self):
+        for pf in self.follow_pending_stack:
+            self.follow_table[pf[0]] |= self.follow_table[pf[1]]
+    
+    # def calculate_follow_of_production(self, lhs, rhs, index=None):
+    #     pass
+        # if len(rhs) == 1:
+        #     if is_nonterminal(rhs[0]):
+        #         self.follow_pending_stack.add((rhs[0], lhs))
+        #     else:
+        #         pass
+        # for rhs_element in range(len(rhs)):
+        #     if is_nonterminal(rhs[rhs_element]):
+        #         if (rhs_element + 1) < len(rhs): # first element, or penultimate element
+        #             next_one = rhs[rhs_element + 1]
+        #             first_next_one = self.firsts_table[next_one]
+        #             if None in first_next_one:
+        #                 print(first_next_one)
+        #                 # first_next_one |= self.calculate_follow_of_production(lhs, rhs)
+        #         else: # just one element or is the last element
+                    
+        #     else:
+        #         continue    
+    
+    # def calculate_follow(self):
+    #     # rule 1: follow(start) = {$}
+    #     self.follow_table[self.start_production].add('$')
+    #     # rule 2: <B> <BETA> where <BETA> exists then follow(<B>) = first(<BETA>) - {None}
+    #     for lhs, rhs_list in self.grammar_rules.items():
+    #         for rhs in range(len(rhs_list)):
+    #             for rhs_element in range(len(rhs_list[rhs])):
+    #                 current = rhs_list[rhs][rhs_element]
+    #                 if not is_nonterminal(current):
+    #                     continue
+    #                 else:
+    #                     if (rhs_element + 1) < len(rhs_list[rhs]):
+    #                         next_one = rhs_list[rhs][rhs_element + 1]
+    #                         if is_nonterminal(next_one):
+    #                             # current and next_one are non terminals
+    #                             first_next_one = deepcopy(self.firsts_table[next_one])
+    #                             if None in first_next_one:
+    #                                 if (rhs_element + 2) < len(rhs_list[rhs]):
+    #                                     for prod in rhs_list[rhs][(rhs_element + 2):]:
+    #                                         f = deepcopy(self.firsts_table[prod])
+    #                                         first_next_one |= f
+    #                                         if None not in self.firsts_table[prod]:
+    #                                             break
+    #                                 else:
+    #                                     self.follow_pending_stack.add((current, lhs))
+    #                             first_next_one.remove(None)
+    #                             self.follow_table[current] |= first_next_one
+    #                         else:
+    #                             # current is non terminal and next_one is terminal: first(terminal) = {terminal}
+    #                             self.follow_table[current].add(next_one)
+    #                     else:
+    #                         # non terminal last one: follow(<last>) = follow(lhs)
+    #                         if (lhs != current):
+    #                             self.follow_pending_stack.add((current, lhs))
+    #                             # print(f"follow_pending_stack={self.follow_pending_stack}") # follow(current) = follow(lhs)
+    #                 # print(self.follow_table)
+    #     # print(f"follow_pending_stack={self.follow_pending_stack}") # follow(current) = follow(lhs)
+    #     print(self.follow_table)
+
+        # print(self.follow_pending_stack)
+        # for pf in self.follow_pending_stack:
+        #     self.follow_table[pf[0]] |= self.follow_table[pf[1]]
+        # print(self.follow_table)
+
 
 p = lr_0('<S´>', 'example.yaml')
 s = slr(p)

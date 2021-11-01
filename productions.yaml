@@ -16,18 +16,19 @@
   - ['<field_decl>', '<field_decl*>']
   - [null]
 <method_decl*>:
-  - [] # pending
+  - ['<method_decl>', '<method_decl*>']
+  - [null]
 ########################################################
 # ⟨fielddecl⟩ → ⟨type⟩ {⟨id⟩ | ⟨id⟩ ′[′ ⟨intliteral⟩ ′]′}+
 ########################################################
 <field_decl>: 
-  - ['<type>' '<{id|id[int_literal]}+>', ';']
+  - ['%type%' '<{id|id[int_literal]}+>', ';']
 <{id|id[int_literal]}+>:
-  - ['<id>', '<{id|id[int_literal]}+´>']
-  - ['<id>', '[', '<int_literal>', ']', '<{id|id[int_literal]}+´>']
+  - ['%id%', '<{id|id[int_literal]}+´>']
+  - ['%id%', '[', '%int_literal%', ']', '<{id|id[int_literal]}+´>']
 <{id|id[int_literal]}+´>:
-  - [',', '<id>', '<{id|id[int_literal]}+´>']
-  - [',', '<id>', '[', '<int_literal>', ']', '<{id|id[int_literal]}+´>']
+  - [',', '%id%', '<{id|id[int_literal]}+´>']
+  - [',', '%id%', '[', '%int_literal%', ']', '<{id|id[int_literal]}+´>']
   - [null]
 ########################################################
 # ⟨method_decl⟩ → {⟨type⟩|void} ⟨id⟩ ({{⟨type⟩⟨id⟩}*}?) ⟨block⟩
@@ -35,13 +36,13 @@
 <method_decl>: 
   - ['<{⟨type⟩|void}>', '<id>', '(', '<{{⟨type⟩⟨id⟩}*}?>', ')', '<block>']
 <{⟨type⟩|void}>:
-  - ['<type>']
+  - ['%type%']
   - ['void']
 <{{⟨type⟩⟨id⟩}*}?>: 
   - ['<{⟨type⟩⟨id⟩}*>']
   - [null]
 <{⟨type⟩⟨id⟩}*>:
-  - ['<type>', '<id>', '<{⟨type⟩⟨id⟩}*>']
+  - ['%type%', '<id>', '<{⟨type⟩⟨id⟩}*>']
   - [null]
 ########################################################
 # ⟨block⟩ → '{' ⟨var_decl⟩* ⟨statement⟩* '}'
@@ -55,11 +56,11 @@
 # ⟨var_decl⟩ → ⟨type⟩ ⟨id⟩+, ';'
 ########################################################
 <var_decl>:
-  - ['<type>', '<id+>', ';']
+  - ['%type%', '<id+>', ';']
 <id+>:
-  - ['<id>', '<id+´>']
+  - ['%id%', '<id+´>']
 <id+´>:
-  - [',', '<id>', '<id+´>']
+  - [',', '%id%', '<id+´>']
   - [null]
 # <type> -> in lexer
 ########################################################
@@ -102,23 +103,58 @@
 # ⟨method_name⟩ → ⟨id⟩
 ########################################################
 <method_name>: 
-  - ['<id>']
+  - ['%id%']
 ########################################################
 # ⟨location⟩ → ⟨id⟩
 ########################################################
 <location>: 
-  - ['<id>'] 
-  - ['<id>', '[', '<expr>', ']']
+  - ['%id%'] 
+  - ['%id%', '[', '<expr>', ']']
 ########################################################
+# ⟨expr⟩ → ⟨location⟩
+#       | ⟨method_call⟩
+#       | ⟨literal⟩
+#       | ⟨expr⟩ ⟨bin_op⟩ ⟨expr⟩
+#       | - ⟨expr⟩
+#       | ! ⟨expr⟩
+#       | ( ⟨expr⟩ )
 ########################################################
-<expr>: "<location> | <method_call> | <literal> | <expr> <bin_op> <expr> | - <expr> | ! <expr> | '(' <expr> ')'"
-<callout_arg>: "<expr> | <string_literal>"
-<bin_op>: "<arith_op> | <rel_op> | <eq_op> | <cond_op>"
+<expr>: 
+  - ['<location>']
+  - ['<method_call>']
+  - ['<literal>']
+  - ['<expr>', '<bin_op>', '<expr>']
+  - ['-', <expr>]
+  - ['!', <expr>]
+  - ['(', <expr>, ')']
+########################################################
+# ⟨callout_arg⟩ → ⟨expr⟩ | ⟨string_literal⟩
+#######################################################
+<callout_arg>: 
+  - ['<expr>']
+  - ['%string_literal%']
+########################################################
+# ⟨bin_op⟩ → ⟨arith_op⟩ 
+#         | ⟨rel_op⟩
+#         | ⟨eq_op⟩
+#         | ⟨cond_op⟩
+########################################################
+<bin_op>: 
+  - ['%arith_op%']
+  - ['%rel_op%']
+  - ['%eq_op%']
+  - ['%cond_op%']
 # <arith_op> -> in lexer
 # <rel_op> -> in lexer 
 # <eq_op> -> in lexer 
 # <cond_op> -> in lexer
-<literal>: "<int_literal> | <char_literal> | <bool_literal>"
+########################################################
+# 
+########################################################
+<literal>: 
+  - ['%int_literal%']
+  - ['%char_literal%']
+  - ['%bool_literal%']
 # <id> -> in lexer 
 # <alpha_num> -> in lexer (implicitly)
 # <alpha> -> in lexer (implicitly)
