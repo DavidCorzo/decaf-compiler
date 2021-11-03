@@ -24,12 +24,20 @@
 <field_decl>: 
   - ['%type%' '<{id|id[int_literal]}+>', ';']
 <{id|id[int_literal]}+>:
-  - ['%id%', '<{id|id[int_literal]}+´>']
-  - ['%id%', '[', '%int_literal%', ']', '<{id|id[int_literal]}+´>']
-<{id|id[int_literal]}+´>:
-  - [',', '%id%', '<{id|id[int_literal]}+´>']
-  - [',', '%id%', '[', '%int_literal%', ']', '<{id|id[int_literal]}+´>']
+  - ['%id%', '<,{id|id[int_literal]}+>']
+  - ['%id%', '[', '%int_literal%', ']', '<,{id|id[int_literal]}+>']
+<,{id|id[int_literal]}+>:
+  - [',', '%id%', '<{[int_literal]}?>', '<,{id|id[int_literal]}+>']
   - [null]
+<{[int_literal]}?>:
+  - ['[', '%int_literal%', ']']
+  - [null]
+# <{id|id[int_literal]}+´>:
+#   - [',', '<{id|id[int_literal]}+´>']
+#   - [null]
+# <{id|id[int_literal]}+´>:
+#   - ['%id%', '<{id|id[int_literal]}+´>']
+#   - ['%id%', '[', '%int_literal%', ']', '<{id|id[int_literal]}+´>']
 ########################################################
 # ⟨method_decl⟩ → {⟨type⟩|void} ⟨id⟩ ({{⟨type⟩⟨id⟩}*}?) ⟨block⟩
 ########################################################
