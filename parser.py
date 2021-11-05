@@ -1,9 +1,6 @@
-from functools import lru_cache
-from typing import OrderedDict
-from yaml import safe_load
-import re
-from dataclasses import dataclass
+from yaml import load, safe_load
 from copy import deepcopy
+import pickle
 
 def is_nonterminal(string):
     if string == None: return False
@@ -11,28 +8,91 @@ def is_nonterminal(string):
 
 def is_terminal(string):
     return not is_nonterminal(string)
-# def none_to_epsilon(element):
-#     if (element == None): return 'ε'
-#     else: return element
+
+def num_label_maker() -> int:
+    """
+    Generador para poder generar estados únicos. Usados en estados de nfa.
+    """
+    num = 0
+    while True:
+        yield num
+        num += 1
 
 LHS, RHS = 0, 1
 class lr_0:
-    def __init__(self, start_production, productions_filename):
-        self.start_production = start_production
-        self.productions_filename = productions_filename
-        self.grammar_rules = self.items = self.reverse_item = self.closed_indexes = self.closed_rules = None
-        self.load_grammar()
+    def __init__(self, start_production, productions_filename, build=False, save=False):
+        self.lr_0_filename                      = 'lr_0_dfa.pickle'
+        self.start_production                   = start_production
+        self.grammar_rules                      = None
+        self.items                              = None
+        self.reverse_item                       = None
+        self.accept_item                        = None
         # class attributes
-        self.states = {}
-        self.item_closures = {}
-        self.accept_items = set()
-        self.closure_table = {}
-        self.closures_to_states = dict()
-        self.state = self.productions_processed = None
-        self.closures()
-        self.create_states()
+        self.states                             = dict()
+        self.start_state                        = None
+        self.renamed_states                     = dict()
+        self.reveresed_renamed_states           = dict()
+        self.leaf_states                        = set()
+        self.accept_state                       = None
+        if build:
+            # attributes
+            self.closed_rules                   = None
+            self.closed_indexes                 = None
+            self.productions_filename           = productions_filename
+            self.closure_table                  = dict()
+            self.closures_to_states             = dict()
+            self.closure_of_current_item        = None
+            self.productions_processed          = None
+            self.state_label_gen                = num_label_maker()
+            self.load_grammar()
+            self.closures()
+            self.create_states()
+        else:
+            self.load_lr_0_dfa()
+        if save: 
+            self.save_lr_0_dfa()
+        # print(self)
+        # print(self.accept_item)
+        # print(self.accept_state)
     
     def load_grammar(self):
+        """
+        1. Open file and read contents: First it opens the file and imports the contets which are the 
+            productions that define the grammar, this is stored in self.grammar and is represented 
+            in the form of a dictionary which keys are the left hand sides and who's 
+            value is the right hand side. Example: 
+                {'<S´>': [['<S>', '$']], '<S>': [['<A>', '<C>', '<B>'], ...}.
+        2. Calculate items: Then we grab the newly imported grammar and fabricate the items of all of 
+        the productions of the grammar, these will be stored in self.items. 
+            - The offset variable is because we don't want to add a '•' after the dollar 
+                sign since that is the accept state, the offset stops us from iterating on 
+                more time and fabricating the item with the dot as the last element after the dollar.
+            - we also are sure to make a copy of the production before adding the dot, otherwise
+                python will assume we mean the pointer to the actual grammar rules, and modify that 
+                when we want a copy of the rule and then add the dot.
+            - items are stored with an index as a key and a tuple representation of the item as 
+                a value, an example: {0: ('<S´>', '•', '<S>', '$'), 1: ('<S´>', '<S>', '•', '$'), ...}.
+            - the tuple representation's first element is the left hand side and the rest of the 
+                elements after the first are the right hand side of the production.
+        3. Calculate self.reverse_item: self.reverse_item exactly the same as self.items just that the keys are 
+            the tuples and the values are index, example: 
+                {('<S´>', '•', '<S>', '$'): 0, ('<S´>', '<S>', '•', '$'): 1, ...}.
+            - This is merely just for convenience and efficiency, hashmaps accessing elements are constant time,
+                however you want to search by value you need to take linear time, therefore it is better to have a 
+                reversed version of the hash map.
+        4. Calculate self.closed_rules are a copy of the self.grammar_rules but with all productions having a dot in the 
+            beggining of the right hand side. This is handy when calculating the closure since if we have a dot 
+            followed by a nonterminal we must add all of the productions of that non terminal with the dot at 
+            the beggining, self.closed rules gets as a key the lhs as usual, and the rhs is the list of productions 
+            with the added dot in the first position. The lhs is the first element of the tuple, the rhs is all 
+            remaining elements after the first. Example: 
+                {'<S´>': [('<S´>', '•', '<S>', '$')], '<S>': [('<S>', '•', '<A>', '<C>', '<B>'), ...}
+        5. Calculate self.closed_indexes is exactly the same as the self.closed_rules only that instead of actually having the 
+            rules with the dot we have the index of the items we calculated in step 2. Recall the items had an index in 
+            the dictionary/hashmap we are using that index since it is just a single number not a tuple, thus occupying 
+            less space, because a DFA of productions for a complex grammar can easily occupy millions of states, better
+            be efficient with how much the states take in memory.
+        """
         with open(self.productions_filename) as file:
             self.grammar_rules = safe_load(file)
             self.items = {}
@@ -43,6 +103,9 @@ class lr_0:
                     for index_marker in range(len(rhs) + offset):
                         rhs_item = rhs.copy()
                         rhs_item.insert(index_marker, '•')
+                        if  (not self.accept_item) and (len(rhs_item) >= 2) and \
+                                (rhs_item[-1] == '$') and (rhs_item[-2] == '•'):
+                            self.accept_item = index
                         self.items.update({index : tuple([lhs] + rhs_item)})
                         index += 1
             self.reverse_item = {v:k for k,v in self.items.items()}
@@ -56,23 +119,62 @@ class lr_0:
             file.close()
     
     def closures(self):
+        """
+        In this function we calculate the closure of all the items indiscriminantly.
+        This is done to avoid unnecessary recursion of calculated items, instead we 
+        just access the closure of that specific item in the dictionary of already 
+        calculated items.
+        1. self.closure_of_current_item is the current state we are manufacturing, it is a set that 
+            stores the current item's indexes. Example: {0, 1, 2, 3} these are item indexes.
+        2. self.productions_processed keeps track of the productions that we have already 
+            processed when we are recursively calculating the closure in the self.get_closure_of_an_item.
+            We always start with registering the start production since we have already processed that one 
+            in it's entirety because it is the starting production.
+        3. call the self.get_closure_of_an_item function, this function will help us make states later on, 
+            since states are nothing more than the closure of various items.
+            - This method makes use of self.closure_of_current_item to add the what the self.get_closure_of_an_item finds recursively.
+                the method does not return anything it calls itself recursively but returns data to the self.closure_of_current_item 
+                attribute, and adds the productions it has processed to the self.productions_processed.
+        4. We add the calculated closure to the self.closure_table dictionary which is the index of the item as a 
+            key and its closure as a value. Example: {0: {1,2,3,4}, ...} item 0 has closure {1,2,3,4}
+        5. Repeat this for all the items.
+        """
         for item_index in self.items.keys():
-            self.state = set()
+            self.closure_of_current_item = set()
             self.productions_processed = set([self.start_production])
             self.get_closure_of_an_item(set([item_index]))
-            self.closure_table[item_index] = self.state
+            self.closure_table[item_index] = self.closure_of_current_item
 
-    # @lru_cache(maxsize=None)
     def get_closure_of_an_item(self, set_of_indexes):
-        self.state |= set_of_indexes
-        actual_items = set()
-        for ai in set_of_indexes:
-            actual_items.add(self.items[ai])
+        """
+        This method calculates the closure of a single item. 
+        1. First it takes a set of indexes (indexes that represent items in the self.items dictionary).
+            These indexes are always part of the closure of the item, therefore the first thing we do is 
+            add it to the self.closure_of_current_item attribute of which this method has global access.
+        2. The set of indexes of the items are useless as indexes, we need the actual items, so we get 
+            the items by using the self.items dictionary and accessing via the key the actual item pointed to.
+        3. Pending productions: this is a set that stores the non terminals that are pending to process recursively
+            whenever we find an item that has a '•' and then a non terminal, we must add all the rhs's of that nonterminal
+            with a '•' at the begining, we will do this later so it will be left pending.
+        4. Base case, if the we have no pending productions we must add, we are done with the recursion and return, 
+            therefore terminating the recursion.
+        5. If we are not done, i.e. we have not broken the recursion with the base case we must process the pending 
+            productions, with a for loop we iterate through the set of pending lhs's to be processed. There is a chance 
+            we have already processed that lhs in an earlier recursive call so we must check for each lhs pending that we 
+            have not added it, thus saving unnecessary recursion, if it has not been added to self.productions added then 
+            we must calculate it, we already have the all the rules with the dot at the begining stored in self.closed_indexes
+            we just go and retrieve them and add them (the indexes) to the pending_items set which holds the items derived from 
+            the pending_productions set, the last thing we do is register the production as already processed to know not to 
+            process it again in future recursive calls.
+        6. Recursive call, we make the recursive call, the set_of_items in this one is the pending_items set, we do this to check 
+            if any other item we added has a '•' followed by a non terminal that needs closure.
+        """
+        self.closure_of_current_item |= set_of_indexes
+        actual_items = {self.items[ai] for ai in set_of_indexes}
         pending_productions = set()
         for item in actual_items:
             lhs = item[LHS]
             rhs = item[RHS:]
-            # accept = ('$' in rhs)
             dot_pos = rhs.index('•')
             if (dot_pos + 1) < len(rhs):
                 after_dot = rhs[dot_pos + 1]
@@ -88,30 +190,150 @@ class lr_0:
         self.get_closure_of_an_item(pending_items)
     
     def create_states(self):
+        """
+        This function creates all the states.
+        1. self.create_state(set([0])) creates all the states recursively upon a single call by simply providing 
+            the kernel start state (the starting production with a '•' as first element of rhs).
+        2. The states and the transitions have now been created recursively, example:
+            {
+                State items: (0, 2, 6, 10, 13, 16, 19, 21, 23, 25): 
+                state transitons :{'<B>': (11, 17), 'd': (14,), 'g': (20,), 'h': (24,), '<A>': (3,), None: (22, 26), '<C>': (7,), '<S>': (1,)}
+                ...
+            }
+        3. The keys of the dictionary are already states, which are calculated with the closure of a starting 
+            set of items, but the transitions are unclosed sets of items, which means they are just added, they
+            are not states but instead are the items that if closure is performed on they become states.
+            In the next for loop we replace the unclosed items for the actual states. Example:
+            {
+                (0, 2, 6, 10, 13, 16, 19, 21, 23, 25): 
+                {'<C>': (7,), '<B>': (11, 17), 'h': (24,), '<A>': (3,), None: (22, 26), 'd': (14,), '<S>': (1,), 'g': (20,)}
+                ...
+            }
+            - Bear in mind that sometimes the unclosed state have a closure of just themselves, therefore the unclosed states 
+            are already states, but we do not know this until we replace them for the closed states.
+        """
         self.create_state(set([0]))
-        for state, transitions in self.states.items():
-            for token, unclosed_state in transitions.items():
-                self.states[state][token] = self.closures_to_states[unclosed_state]
-        # for k,v in self.states.items():
-        #     print(k, ':', v)
         
-    def create_state(self, set_of_items):
-        closure_of_items = set()
-        for coi in set_of_items:
-            closure_of_items |= self.closure_table[coi]
-        items_tuple = tuple(sorted(set_of_items))
-        state_key = tuple(sorted(closure_of_items))
-        if not self.closures_to_states.get(items_tuple):
-            # register that we are going to calculate this in this iteration.
-            self.closures_to_states[items_tuple] = state_key
-        else: 
-            # this pair of items has already been calculated
-            return self.closures_to_states[items_tuple]
-        actual_items = set()
-        for ai in closure_of_items:
-            actual_items.add(self.items[ai])
-        if self.states.get(state_key):
-            return state_key
+    # def create_state(self, set_of_items):
+    #     """
+    #     This function is called create_state, but in reality the recursion it has creates all the states.
+    #     1.  We are sent a set of items as a set of indexes. We need to know the closure of all of those items.
+    #         We just look up the closure_table for the item closure we need and we get the closure from there.
+    #         When all the items have been performed closure on we simply add them to the closure_of_items set.
+    #     2. items_tuple: The items tuple simply stores the items it passed in in set form as a tuple to later 
+    #         store them in the self.closures_to_states, this is to transform the transitions later on, because
+    #         the transitions are going to be left unclosed.
+    #     3. state_key: The closure_of_items forms a state in our DFA, therefore we see in the self.states dictionary 
+    #         if there is any state with that tuple (sort the tuple because a tuple like (1,2) is not equal to (2,1)).
+    #     4. If the item 0 is present in the set_of_items passed in as arguments then that state is the start state.
+    #     5. if we have not registered the unclosed state in the self.closures_to_states dictionary we must do so
+    #         and continue executing the rest of the function.
+    #     6. If we have registered the unclosed state to the self.closures_to_states dictionary then we have arrived 
+    #         at a base case and return the value of the dictionary at key=items_tuple of self.closures_to_states.
+    #     7. If we did not arrive at a base case then we need to get the actual items from the indexes that were passed 
+    #         in, in this case we store them in the actual_items set.
+    #     8. If the state_key has been registered as a state then we return the state_key. This is our second base case.
+    #     9. If we have failed to terminate recursion for any of the two base cases then we continue and calculate the 
+    #         transitions of the current state, we start by iterating over the actual_items set. 
+    #         - separate the lhs from the rhs.
+    #         - figure out the index of the '•'
+    #         - see if the dot is not the last element of the list, if it is not then access 
+    #             the element next to it. 
+    #         - If there is a next element and that next element is not '$' then we register a 
+    #             transition.
+    #     10. We then need to iterate for every transition we found. 
+    #         - the items we found are the current ones, we need to advance the dot by one
+    #             so if we have a transition to ('<S>', <T>, '•', '(', ')') we need the item 
+    #             index corresponding to ('<S>', <T>, '(', '•', ')')
+    #         - the next_items are unclosed states that we add with the transition. Therefore 
+    #             we can make the recursive call with those items as the next set of items.
+    #     11. If there are no transitions then we have arrived to the third base case and we 
+    #         cut the recursion.
+    #     12. If there are transitions then we need to process them: 
+    #         - First we check if the state already exists and if it does not we add it to the 
+    #             self.states dictionary, both the new state_key and the transitions from that 
+    #             state.
+    #         - For each transition we check if we have not yet made it in the self.closures_to_states 
+    #             if we have then we ignore, because we have already made that state, otherwise we must 
+    #             make the recursive call and end once we are at a leaf node.
+    #     """
+        # closure_of_items = set()
+        # for coi in set_of_items: closure_of_items |= self.closure_table[coi]
+        # items_tuple = tuple(sorted(set_of_items))
+        # state_key = tuple(sorted(closure_of_items))
+        # if 0 in set_of_items: self.start_state = deepcopy(state_key)
+        # # register that we are going to calculate this in this iteration.
+        # if not self.closures_to_states.get(items_tuple): self.closures_to_states[items_tuple] = state_key
+        # # this pair of items has already been calculated
+        # else:  return self.closures_to_states[items_tuple]
+        # actual_items = {self.items[ai] for ai in closure_of_items}
+        # if self.states.get(state_key): return state_key
+        # transitions = dict()
+        # for item in actual_items:
+        #     lhs = item[LHS]
+        #     rhs = item[RHS:]
+        #     dot_pos = rhs.index('•')
+        #     if (dot_pos + 1) < len(rhs):
+        #         after_dot = rhs[dot_pos + 1]
+        #         if (after_dot != '$'):
+        #             if transitions.get(after_dot):
+        #                 transitions[after_dot].add(self.reverse_item[item])
+        #             else:
+        #                 transitions[after_dot] = set([self.reverse_item[item]])
+        # if len(transitions) == 0: return state_key
+        # transitions = self.calculate_transitions(transitions)
+        # if not (self.states.get(state_key)):
+        #     self.states[state_key] = transitions
+        # for transition, new_state in self.states[state_key].items():
+        #     possible_state_key = tuple(sorted(new_state))
+        #     if possible_state_key not in self.closures_to_states.keys():
+        #         self.create_state(new_state)
+    
+    def __repr__(self) -> str:
+        s = str()
+        for state, transitions in self.states.items():
+            s += f"state={state}\n"
+            state = self.reveresed_renamed_states[state]
+            for item_i in state:
+                item = self.items[item_i]
+                s += f"{item[LHS]} -> {' '.join(item[RHS:])}\n"
+            s += f"{transitions}\n\n"
+        return s
+    
+    def __str__(self) -> str:
+        return self.__repr__()
+    
+    def create_state(self, set_of_item_indexes):
+        state_key = tuple(sorted(list(self.get_closure_of_a_set_of_items(set_of_item_indexes))))
+        if (self.start_state == None) and (0 in state_key): 
+            self.start_state = state_key
+        if self.renamed_states.get(state_key):
+            return self.renamed_states[state_key]
+        renamed_state = self.get_or_create_renamed_state(state_key)
+        transitions = self.calculate_transitions(self.get_actual_items(state_key))
+        if len(transitions) == 0:
+            if (self.accept_item in state_key): 
+                if not self.accept_state: self.accept_state = self.renamed_states[state_key]
+                elif (self.accept_state == self.renamed_states[state_key]): pass
+                else: print("second accept state present")
+            self.leaf_states.add(renamed_state)
+            return renamed_state
+        self.states[renamed_state] = transitions
+        for token, next_unclosed_state in self.states[renamed_state].items():
+            self.states[renamed_state][token] = self.create_state(next_unclosed_state)
+        return renamed_state
+
+    def get_or_create_renamed_state(self, state_key):
+        if self.renamed_states.get(state_key):
+            return self.renamed_states[state_key]
+        else:
+            state_name = next(self.state_label_gen)
+            self.renamed_states[state_key] = deepcopy(state_name)
+            self.reveresed_renamed_states[state_name] = state_key
+            self.states[state_name] = dict()
+            return state_name
+    
+    def calculate_transitions(self, actual_items) -> dict:
         transitions = dict()
         for item in actual_items:
             lhs = item[LHS]
@@ -124,38 +346,20 @@ class lr_0:
                         transitions[after_dot].add(self.reverse_item[item])
                     else:
                         transitions[after_dot] = set([self.reverse_item[item]])
-        # advance by one all the transitions. 
-        # if this is not done there is infinite recursion.
         for transition, item_set in transitions.items():
             next_items = set()
             for it in item_set:
                 advanced_by_one = self.advance_dot_by_one(it)
                 if advanced_by_one:
                     next_items.add(advanced_by_one)
-            transitions[transition] = tuple(sorted(next_items))
-        # print("", end='')
-        # base case is when transitions are 0.
-        if len(transitions) == 0:
-            return state_key
-        else:
-            # if self.states.get(state_key):
-            #     # print(self.states[state_key])
-            #     for transition, new_state in transitions.items():
-            #         if self.states[state_key].get(transition):
-            #             self.states[state_key][transition] |= new_state
-            # else:
-            if not (self.states.get(state_key)):
-                self.states[state_key] = transitions
-            for transition, new_state in self.states[state_key].items():
-                possible_state_key = tuple(sorted(new_state))
-                if possible_state_key not in self.closures_to_states.keys():
-                    # print(f"closures_to_states={self.closures_to_states}")
-                    state = self.create_state(new_state)
-                # else:
-                #     state = self.closures_to_states[possible_state_key]
-                # self.states[state_key][transition] = state
+            transitions[transition] = tuple(sorted(list(next_items)))
+        return transitions
     
     def advance_dot_by_one(self, item_index):
+        """
+        This function simply takes in a tuple item, separates the lhs from the rhs and to the rhs
+        advances the dot at once.
+        """
         item = self.items[item_index]
         lhs = item[LHS]
         rhs = list(item[RHS:])
@@ -172,21 +376,55 @@ class lr_0:
                 return self.reverse_item[tuple(item)]
         else:
             return None
+    
+    def get_closure_of_a_set_of_items(self, set_of_item_indexes):
+        closure_of_items = set()
+        for soii in set_of_item_indexes: closure_of_items |= self.closure_table[soii]
+        return closure_of_items
+    
+    def get_actual_items(self, item_indexes_iterable) -> set:
+        return {self.items[ai] for ai in item_indexes_iterable}
+    
+    def load_lr_0_dfa(self):
+        with open(self.lr_0_filename, mode='rb') as file:
+            retrieved = pickle.load(file)
+            # print(set(self.__dict__.keys()) - set(retrieved.keys()))
+            for attributes in self.__dict__.keys():
+                if retrieved.get(attributes):
+                    self.__dict__[attributes] = retrieved[attributes]
+                else:
+                    print(attributes)
+                    self.__dict__[attributes] = None
+            file.close()
+    
+    def save_lr_0_dfa(self):
+        with open(self.lr_0_filename, mode='wb') as file:
+            to_save = self.__dict__
+            to_save.pop('state_label_gen')
+            pickle.dump(to_save, file)
+            file.close()
+    
 
-SHIFT, REDUCE, GOTO = 0, 1, 2
+ACTION, GOTO = 0, 1
+SHIFT, REDUCE, GOTO, ACCEPT = 'S', 'R', 'G', 'A'
 class slr:
     def __init__(self, lr_0_assembled:lr_0):
-        self.grammar_rules = lr_0_assembled.grammar_rules
-        self.states = lr_0_assembled.states
-        self.start_production = lr_0_assembled.start_production
-        self.slr_parsing_table = {}
-        self.firsts_table = {}
-        self.follow_table = {}
-        self.first_of_current = None
-        self.follow_pending_stack = list()
-        self.current = None
+        self.grammar_rules          = lr_0_assembled.grammar_rules
+        self.states                 = lr_0_assembled.states
+        self.accept_state           = lr_0_assembled.accept_state
+        self.index_to_states        = {index:k for index,k in zip(range(len(self.states.keys())), self.states.keys())}
+        self.states_to_index        = {k:index for index,k in self.index_to_states.items()}
+        self.start_production       = lr_0_assembled.start_production
+        self.slr_parsing_table      = None
+        self.firsts_table           = dict()
+        self.follow_table           = dict()
+        self.first_of_current       = None
+        self.follow_pending_stack   = list()
+        self.current                = None
+        self.slr_stack              = list()
         self.firsts()
         self.follows()
+        self.construct_slr()
     
     def firsts(self):
         for lhs in self.grammar_rules.keys():
@@ -194,57 +432,13 @@ class slr:
         pending_firsts = set(self.grammar_rules.keys()) - set(self.firsts_table.keys())
         for lhs in pending_firsts:
             first = self.calculate_firsts(lhs)
-        # for lhs in pending_firsts:
-        #     first_of_current = set()
-        #     for rhs_tokens in self.grammar_rules[lhs]:
-        #         ft = self.firsts_table
-        #         first_of_current |= self.calculate_first(lhs, rhs_tokens)
-        #     if self.firsts_table.get(lhs):
-        #         self.firsts_table[lhs] |= deepcopy(first_of_current)
-        #     else:
-        #         self.firsts_table[lhs] = deepcopy(first_of_current)
-        print("FIRST")
-        # print(self.firsts_table)
-        for k,v in self.firsts_table.items():
-            print(k, v)
+        # print("FIRST")
+        # for k,v in self.firsts_table.items():
+        #     print(k, v)
     
     def get_first_of_non_terminal(self, lhs):
         return {x[0] for x in self.grammar_rules[lhs]}
     
-    # def calculate_first(self, lhs, rhs_tokens):
-    #     first = set()
-    #     rhs_index = 0
-    #     for rhs in rhs_tokens:
-    #         f:set = self.get_first(rhs) - {'$'}
-    #         # returns all terminals
-    #         if (None in f) and (rhs_index != len(rhs_tokens) - 1):
-    #             # if epsilon is in first and this element is not the last one then remove it. 
-    #             # It will get added on later in the next production if there is any.
-    #             first |= deepcopy(f - {None})
-    #         else:
-    #             first |= f
-    #         rhs_index += 1
-    #         if (None not in f):
-    #             break
-    #     return first
-    
-    # def get_first(self, rhs_element):
-    #     ft = self.firsts_table
-    #     if is_nonterminal(rhs_element):
-    #         # we know its a nonterminal
-    #         if self.firsts_table.get(rhs_element):
-    #             return self.firsts_table[rhs_element]
-    #         first = self.get_first_of_non_terminal(rhs_element)
-    #         terminal = {x for x in first if is_terminal(x)}
-    #         non_terminals = first - terminal
-    #         for nt in non_terminals:
-    #             for rhs in self.grammar_rules[nt]:
-    #                 terminal |= self.calculate_first(nt, rhs)
-    #         return terminal
-    #     else:
-    #         # we know it is a terminal
-    #         return set([rhs_element])
-        
     def calculate_firsts(self, lhs):
         # lhs is a non terminal
         if self.firsts_table.get(lhs):
@@ -278,54 +472,6 @@ class slr:
             self.firsts_table[lhs] = first
         return first
     
-    # def calculate_first(self, lhs):
-    #     dummy1 = self.first_of_current
-    #     dummy2 = self.firsts_table
-    #     if self.firsts_table.get(lhs): 
-    #         return deepcopy(self.firsts_table[lhs])
-    #     firsts = self.get_first_of_non_terminal(lhs)
-    #     terminals = {x for x in firsts if is_terminal(x)}
-    #     non_terminals = firsts - terminals
-    #     if len(non_terminals) == 0:
-    #         return terminals 
-    #     for pnt in non_terminals:
-    #         firsts |= self.calculate_first(pnt)
-    #     if self.current == lhs:
-    #         rhs_list = deepcopy(self.grammar_rules[lhs])
-    #         for rhs in rhs_list:
-    #             if is_terminal(rhs[0]):
-    #                 continue
-    #             else:
-    #                 if None in self.firsts_table[rhs[0]]:
-    #                     token_index = 0
-    #                     if (token_index + 1) < len(rhs):
-    #                         pass
-                        
-                            
-                        
-            
-    # def calculate_first(self, lhs, rhs_i):
-    #     dummy = self.first_of_current
-    #     dummy2 = self.firsts_table
-    #     first = deepcopy(self.grammar_rules[lhs][rhs_i][0])
-    #     if not is_nonterminal(first):
-    #         self.first_of_current.add(first)
-    #         return
-    #     rhs_list = deepcopy(self.grammar_rules[first])
-    #     for rhs_next in range(len(rhs_list)):
-    #         if self.firsts_table.get(first):
-    #             self.first_of_current |= deepcopy(self.firsts_table[first])
-    #         else:
-    #             self.calculate_first(first, rhs_next)
-        # if None in self.first_of_current:
-        #     if (index_of_token + 1) < len(self.grammar_rules[lhs][rhs_i]):
-        #         if (self.grammar_rules[lhs][rhs_i][index_of_token + 1] == '$'):
-        #             return
-        #         self.first_of_current.remove(None)
-        #         self.calculate_first(lhs, rhs_i, index_of_token + 1)
-        #     else: 
-        #         return
-    
     def calculate_feasable_first(self, lhs):
         non_terminals = set()
         for rhs_list in self.grammar_rules[lhs]:
@@ -344,9 +490,6 @@ class slr:
                 for rhs_element in range(len(rhs)):
                     self.calculate_follow(lhs, rhs, rhs_element)
         self.make_pending_follows()
-        print("FOLLOWS")
-        for k,v in self.follow_table.items():
-            print(k, v)
     
     def is_nullable(self, production):
         if not is_nonterminal(production): return False
@@ -368,8 +511,6 @@ class slr:
         nullable = [self.is_nullable(beta_production) for beta_production in beta]
         a = all(nullable)
         return a
-        # if all(nullable):
-        #     self.follow_pending_stack.add((b, lhs))
             
 
     def calculate_follow(self, lhs, rhs, rhs_index):
@@ -386,82 +527,35 @@ class slr:
         if (beta == None) or (self.beta_contains_epsilon(beta)): # 1 production, is the last one
             if b != lhs:
                 self.follow_pending_stack.append((b, lhs))
-        # print(self.follow_table)
-        # print(self.follow_pending_stack)
-        # print('*'*100)
-        # contains_epsilon = None in self.follow_table[b]
-        # if contains_epsilon or (beta == None):
             
-
     def make_pending_follows(self):
         for pf in self.follow_pending_stack:
             self.follow_table[pf[0]] |= deepcopy(self.follow_table[pf[1]])
+
+    def construct_slr(self):
+        self.slr_parsing_table = {k:{} for k in self.index_to_states.keys()}
+        for state, transitions in self.states.items():
+            if state == self.accept_state:
+                self.slr_parsing_table[state]['$'] = tuple([ACCEPT, 0])
+                continue
+            for transition_token, next_state in transitions.items():
+                if is_nonterminal(transition_token): # nonterminal, therefore goto
+                    self.slr_parsing_table[state][transition_token] = tuple([GOTO, next_state])
+                else: # terminal, therefore action
+                    self.slr_parsing_table[state][transition_token] = tuple([SHIFT, next_state])
+                pass
+        print(self.slr_parsing_table)
     
-    # def calculate_follow_of_production(self, lhs, rhs, index=None):
-    #     pass
-        # if len(rhs) == 1:
-        #     if is_nonterminal(rhs[0]):
-        #         self.follow_pending_stack.add((rhs[0], lhs))
-        #     else:
-        #         pass
-        # for rhs_element in range(len(rhs)):
-        #     if is_nonterminal(rhs[rhs_element]):
-        #         if (rhs_element + 1) < len(rhs): # first element, or penultimate element
-        #             next_one = rhs[rhs_element + 1]
-        #             first_next_one = self.firsts_table[next_one]
-        #             if None in first_next_one:
-        #                 print(first_next_one)
-        #                 # first_next_one |= self.calculate_follow_of_production(lhs, rhs)
-        #         else: # just one element or is the last element
-                    
-        #     else:
-        #         continue    
+    def shift(self):
+        pass
     
-    # def calculate_follow(self):
-    #     # rule 1: follow(start) = {$}
-    #     self.follow_table[self.start_production].add('$')
-    #     # rule 2: <B> <BETA> where <BETA> exists then follow(<B>) = first(<BETA>) - {None}
-    #     for lhs, rhs_list in self.grammar_rules.items():
-    #         for rhs in range(len(rhs_list)):
-    #             for rhs_element in range(len(rhs_list[rhs])):
-    #                 current = rhs_list[rhs][rhs_element]
-    #                 if not is_nonterminal(current):
-    #                     continue
-    #                 else:
-    #                     if (rhs_element + 1) < len(rhs_list[rhs]):
-    #                         next_one = rhs_list[rhs][rhs_element + 1]
-    #                         if is_nonterminal(next_one):
-    #                             # current and next_one are non terminals
-    #                             first_next_one = deepcopy(self.firsts_table[next_one])
-    #                             if None in first_next_one:
-    #                                 if (rhs_element + 2) < len(rhs_list[rhs]):
-    #                                     for prod in rhs_list[rhs][(rhs_element + 2):]:
-    #                                         f = deepcopy(self.firsts_table[prod])
-    #                                         first_next_one |= f
-    #                                         if None not in self.firsts_table[prod]:
-    #                                             break
-    #                                 else:
-    #                                     self.follow_pending_stack.add((current, lhs))
-    #                             first_next_one.remove(None)
-    #                             self.follow_table[current] |= first_next_one
-    #                         else:
-    #                             # current is non terminal and next_one is terminal: first(terminal) = {terminal}
-    #                             self.follow_table[current].add(next_one)
-    #                     else:
-    #                         # non terminal last one: follow(<last>) = follow(lhs)
-    #                         if (lhs != current):
-    #                             self.follow_pending_stack.add((current, lhs))
-    #                             # print(f"follow_pending_stack={self.follow_pending_stack}") # follow(current) = follow(lhs)
-    #                 # print(self.follow_table)
-    #     # print(f"follow_pending_stack={self.follow_pending_stack}") # follow(current) = follow(lhs)
-    #     print(self.follow_table)
-
-        # print(self.follow_pending_stack)
-        # for pf in self.follow_pending_stack:
-        #     self.follow_table[pf[0]] |= self.follow_table[pf[1]]
-        # print(self.follow_table)
+    def reduce(self):
+        pass
+    
+    def goto(self):
+        pass
 
 
-
-p = lr_0('<S´>', 'grammars/example.yaml')
+p = lr_0('<S´>', 'grammars/example.yaml', build=False)
+print(p)
 s = slr(p)
