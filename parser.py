@@ -1,6 +1,8 @@
-from yaml import load, safe_load
+from os import error
+from yaml import safe_load
 from copy import deepcopy
 import pickle
+from scanner import scanner
 
 def is_nonterminal(string):
     if string == None: return False
@@ -8,6 +10,9 @@ def is_nonterminal(string):
 
 def is_terminal(string):
     return not is_nonterminal(string)
+
+def is_terminal_with_value(string):
+    return ((string[0] == '%') and (':' in string[1:-1]) and (string[-1] == '%'))
 
 def num_label_maker() -> int:
     """
@@ -17,6 +22,11 @@ def num_label_maker() -> int:
     while True:
         yield num
         num += 1
+    
+def printable(token):
+    if token == None:
+        token = 'ε'
+    return token
 
 LHS, RHS = 0, 1
 class lr_0:
@@ -296,7 +306,7 @@ class lr_0:
             state = self.reveresed_renamed_states[state]
             for item_i in state:
                 item = self.items[item_i]
-                s += f"{item[LHS]} -> {' '.join(item[RHS:])}\n"
+                s += f"{item[LHS]} -> {' '.join(map(str, item[RHS:]))}\n"
             s += f"{transitions}\n\n"
         return s
     
@@ -405,26 +415,43 @@ class lr_0:
             file.close()
     
 
-ACTION, GOTO = 0, 1
 SHIFT, REDUCE, GOTO, ACCEPT = 'S', 'R', 'G', 'A'
 class slr:
     def __init__(self, lr_0_assembled:lr_0):
-        self.grammar_rules          = lr_0_assembled.grammar_rules
-        self.states                 = lr_0_assembled.states
-        self.accept_state           = lr_0_assembled.accept_state
-        self.index_to_states        = {index:k for index,k in zip(range(len(self.states.keys())), self.states.keys())}
-        self.states_to_index        = {k:index for index,k in self.index_to_states.items()}
-        self.start_production       = lr_0_assembled.start_production
-        self.slr_parsing_table      = None
-        self.firsts_table           = dict()
-        self.follow_table           = dict()
-        self.first_of_current       = None
-        self.follow_pending_stack   = list()
-        self.current                = None
-        self.slr_stack              = list()
+        self.grammar_rules              = lr_0_assembled.grammar_rules
+        self.states                     = lr_0_assembled.states
+        self.reveresed_renamed_states   = lr_0_assembled.reveresed_renamed_states
+        self.items                      = lr_0_assembled.items
+        self.accept_state               = lr_0_assembled.accept_state
+        self.leaf_states                = lr_0_assembled.leaf_states
+        self.index_to_states            = {index:k for index,k in zip(range(len(self.states.keys())), self.states.keys())}
+        self.states_to_index            = {k:index for index,k in self.index_to_states.items()}
+        self.start_production           = lr_0_assembled.start_production
+        self.slr_parsing_table          = None
+        self.firsts_table               = dict()
+        self.follow_table               = dict()
+        self.first_of_current           = None
+        self.follow_pending_stack       = list()
+        self.current                    = None
+        self.slr_stack                  = list()
+        self.slr_grammar_rules          = dict()
+        self.reverse_slr_grammar_rules  = dict()
+        self.index_grammar_rules()
         self.firsts()
         self.follows()
         self.construct_slr()
+    
+    def index_grammar_rules(self):
+        index = 0
+        for lhs, rhs_list in self.grammar_rules.items():
+            for rhs in rhs_list:
+                current_gr = tuple([lhs]+rhs)
+                self.slr_grammar_rules[index] = current_gr
+                self.reverse_slr_grammar_rules[current_gr] = index
+                index += 1
+        # print(self.slr_grammar_rules)
+        # print(self.reverse_slr_grammar_rules)
+                
     
     def firsts(self):
         for lhs in self.grammar_rules.keys():
@@ -432,9 +459,6 @@ class slr:
         pending_firsts = set(self.grammar_rules.keys()) - set(self.firsts_table.keys())
         for lhs in pending_firsts:
             first = self.calculate_firsts(lhs)
-        # print("FIRST")
-        # for k,v in self.firsts_table.items():
-        #     print(k, v)
     
     def get_first_of_non_terminal(self, lhs):
         return {x[0] for x in self.grammar_rules[lhs]}
@@ -543,9 +567,36 @@ class slr:
                     self.slr_parsing_table[state][transition_token] = tuple([GOTO, next_state])
                 else: # terminal, therefore action
                     self.slr_parsing_table[state][transition_token] = tuple([SHIFT, next_state])
-                pass
-        print(self.slr_parsing_table)
-    
+        # print(self.follow_table)
+        for leaf_state in self.leaf_states:
+            state = self.reveresed_renamed_states[leaf_state]
+            for item in state:
+                reduce_production = list(self.items[item])
+                reduce_production.remove('•')
+                reduce_production_index = self.reverse_slr_grammar_rules[tuple(reduce_production)]
+                follow = self.follow_table[reduce_production[LHS]]
+                for f in follow:
+                    if not self.slr_parsing_table[leaf_state].get(f):
+                        self.slr_parsing_table[leaf_state][f] = tuple([REDUCE, reduce_production_index])
+                    else:
+                        if self.slr_parsing_table[leaf_state][f][0] == ACCEPT:
+                            continue
+                        else:
+                            # reduce reduce / shift reduce / shift shift comflict
+                            print(f"ERROR (Shift Reduce/Reduce Reduce conflict): {f} already in parsing table as shift, {self.slr_parsing_table[leaf_state]}, prod_i={reduce_production_index}, prod={reduce_production}")
+                            print(f"already={self.slr_grammar_rules[self.slr_parsing_table[leaf_state][f][1]]}, new={self.slr_grammar_rules[reduce_production_index]}")
+                            exit()
+        # print(self.slr_parsing_table)
+
+class parser:
+    def __init__(self, slr_table:slr, lexed_tokens):
+        self.slr_parsing_table  = slr_table.slr_parsing_table
+        self.productions_tree   = dict()
+        self.state_stack        = list()
+        self.productions_stack  = list()
+        self.lexed_tokens       = lexed_tokens
+        self.parse()
+
     def shift(self):
         pass
     
@@ -555,7 +606,41 @@ class slr:
     def goto(self):
         pass
 
+    def error(self):
+        print("ERROR: NO OPERATION FOR THE SYMBOL.")
+        error(-1)
+    
+    def parse(self):
+        ss = self.state_stack
+        self.state_stack.append(0)
+        accept = False
+        index = 0
+        while not accept:
+            token = self.lexed_tokens[index]
+            operation = next = None
+            # if it exists
+            if self.slr_parsing_table[self.state_stack[-1]].get(token):
+                operation, next = self.slr_parsing_table[self.state_stack[-1]][token]
+            else:
+                self.error()
+            # operation found
+            if  operation == SHIFT:
+                pass
+            elif operation == REDUCE:
+                pass
+            elif operation == ACCEPT:
+                accept = True
 
-p = lr_0('<S´>', 'grammars/example.yaml', build=False)
-print(p)
-s = slr(p)
+
+# code = scanner("./src_code.txt", "./tokens.yaml")
+# code.produce_automata()
+# code.save_automata("tokens.pickle")
+# code.load_automata("./tokens.pickle")
+# code.scan()
+# print(code.linked_list_of_tokens)
+
+lexed_tokens = ['class', ('%id%', 'Program'), '{', 'def', ('%type%', 'int'), ('%id%', 'add'), '(', ('%type%', 'int'), ('%id%', 'x'), ',', ('%type%', 'int'), ('%id%', 'y'), ')', '{', 'return', ('%id%', 'x'), ('%arith_op%', '+'), ('%id%', 'y'), ';', '}', 'def', ('%type%', 'int'), ('%id%', 'main'), '(', ')', '{', ('%type%', 'int'), ('%id%', 'a'), ';', ('%id%', 'a'), ('%assign_op%', '='), ('%int_literal%', '3'), ';', ('%id%', 'a'), ('%assign_op%', '+='), ('%assign_op%', '='), ('%int_literal%', '1'), ';', ('%string_literal%', '"this is a string???"'), ';', ('%char_literal%', "'c'"), ';', 'return', ('%id%', 'add'), '(', ('%id%', 'a'), ',', ('%int_literal%', '2'), ')', ';', '}', '}']
+
+l = lr_0('<program>', 'productions.yaml', build=True)
+s = slr(l)
+p = parser(s, lexed_tokens)

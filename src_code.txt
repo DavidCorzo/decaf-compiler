@@ -1,14 +1,14 @@
-def int add(int x, int y)
-{
-    return x + y;
-}
+class Program {
+    def int add(int x, int y) {
+        return x + y;
+    }
 
-def int main()
-{
-    int a;
-    a = 3;
-    a += 1;
-    "this is a string???";
-    'c';
-    return add(a, 2);
+    def int main() {
+        int a;
+        a = 3;
+        a += 1;
+        "this is a string???";
+        'c';
+        return add(a, 2);
+    }
 }

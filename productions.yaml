@@ -7,7 +7,7 @@
 # ⟨program⟩ → class Program '{' ⟨fielddecl⟩* ⟨method_decl⟩* '}'
 ########################################################
 <program´>: 
-  - ['class', 'Program', 
+  - ['class', '%id%',
       '{', 
         '<field_decl*>', 
         '<method_decl*>',
@@ -22,7 +22,7 @@
 # ⟨fielddecl⟩ → ⟨type⟩ {⟨id⟩ | ⟨id⟩ ′[′ ⟨intliteral⟩ ′]′}+
 ########################################################
 <field_decl>: 
-  - ['%type%' '<{id|id[int_literal]}+>', ';']
+  - ['%type%', '<{id|id[int_literal]}+>', ';']
 <{id|id[int_literal]}+>:
   - ['%id%', '<,{id|id[int_literal]}+>']
   - ['%id%', '[', '%int_literal%', ']', '<,{id|id[int_literal]}+>']
@@ -32,25 +32,19 @@
 <{[int_literal]}?>:
   - ['[', '%int_literal%', ']']
   - [null]
-# <{id|id[int_literal]}+´>:
-#   - [',', '<{id|id[int_literal]}+´>']
-#   - [null]
-# <{id|id[int_literal]}+´>:
-#   - ['%id%', '<{id|id[int_literal]}+´>']
-#   - ['%id%', '[', '%int_literal%', ']', '<{id|id[int_literal]}+´>']
 ########################################################
 # ⟨method_decl⟩ → {⟨type⟩|void} ⟨id⟩ ({{⟨type⟩⟨id⟩}*}?) ⟨block⟩
 ########################################################
 <method_decl>: 
-  - ['<{⟨type⟩|void}>', '<id>', '(', '<{{⟨type⟩⟨id⟩}*}?>', ')', '<block>']
-<{⟨type⟩|void}>:
-  - ['%type%']
-  - ['void']
-<{{⟨type⟩⟨id⟩}*}?>: 
-  - ['<{⟨type⟩⟨id⟩}*>']
-  - [null]
-<{⟨type⟩⟨id⟩}*>:
-  - ['%type%', '%id%', '<{⟨type⟩⟨id⟩}*>']
+  - ['%type%', '%id%', '(', '<args>', ')', '<block>']
+<args>:
+  - ['%type%', '%id%', '<args´>']
+  - ['<args´>']
+  # - ['%type%', '%id%']
+  # - ['<args>', ',', <args>]
+  # - [null]
+<args´>:
+  - [',', '<args>', '<args´>']
   - [null]
 ########################################################
 # ⟨block⟩ → '{' ⟨var_decl⟩* ⟨statement⟩* '}'
@@ -59,6 +53,9 @@
   - ['{', '<var_decl*>', <statement*>, '}']
 <var_decl*>:
   - ['<var_decl>', '<var_decl*>']
+  - [null]
+<statement*>:
+  - ['<statement>', '<statement*>']
   - [null]
 ########################################################
 # ⟨var_decl⟩ → ⟨type⟩ ⟨id⟩+, ';'
@@ -81,17 +78,17 @@
 #            | continue ;
 #            | ⟨block⟩ ;
 ########################################################
-<statement>: 
-  - ['<location>', '<assign_op>', '<expr>']
+<statement>:
+  - ['<location>', '%assign_op%', '<expr>']
   - ['<method_call>']
-  - ['%keyword:if%', '(', '<expr>', ')', '<block>', '<else ⟨block⟩?>', ';']
-  - ['%keyword:for%', '<id>', '%assign_op:=%', '<expr>', ',', '<expr>', '<block>', ';']
-  - ['%keyword:return%', '<⟨expr⟩?>', ';']
-  - ['%keyword:break%', ';']
-  - ['%keyword:continue%', ';']
+  - ['if', '(', '<expr>', ')', '<block>', '<else ⟨block⟩?>', ';']
+  - ['for', '%id%', '%assign_op:=%', '<expr>', ',', '<expr>', '<block>', ';']
+  - ['return', '<⟨expr⟩?>', ';']
+  - ['break', ';']
+  - ['continue', ';']
   - ['<block>', ';']
 <else ⟨block⟩?>:
-  - ['%keyword:else%', '<block>']
+  - ['else', '<block>']
   - [null]
 <⟨expr⟩?>:
   - ['<expr>']
@@ -102,10 +99,14 @@
 ########################################################
 <method_call>: 
   - ['<method_name>', '(', '<{expr+,}?>', ')']
+  - ['callout', '(', '%string_literal%', '<callout_arg+>', ')']
 <{expr+,}?>:
   - ['<expr>', '<{expr+,}?´>']
 <{expr+,}?´>:
   - [',', '<expr>', '<{expr+,}?´>']
+  - [null]
+<callout_arg+>:
+  - [',', '<callout_arg>', <callout_arg+>]
   - [null]
 ########################################################
 # ⟨method_name⟩ → ⟨id⟩
@@ -113,7 +114,7 @@
 <method_name>: 
   - ['%id%']
 ########################################################
-# ⟨location⟩ → ⟨id⟩
+# ⟨location⟩ → ⟨id⟩ | ⟨id⟩ '[' <expr> ']'
 ########################################################
 <location>: 
   - ['%id%'] 
@@ -127,14 +128,24 @@
 #       | ! ⟨expr⟩
 #       | ( ⟨expr⟩ )
 ########################################################
+# <expr>: LEFT RECURSIVE
+#   - ['<location>']
+#   - ['<method_call>']
+#   - ['<literal>']
+#   - ['<expr>', '<bin_op>', '<expr>']
+#   - ['-', <expr>]
+#   - ['!', <expr>]
+#   - ['(', <expr>, ')']
 <expr>: 
-  - ['<location>']
-  - ['<method_call>']
-  - ['<literal>']
-  - ['<expr>', '<bin_op>', '<expr>']
-  - ['-', <expr>]
-  - ['!', <expr>]
-  - ['(', <expr>, ')']
+  - ['<location>', '<expr´>']
+  - ['<method_call>', '<expr´>']
+  - ['<literal>', '<expr´>']
+  - ['-', '<expr>', '<expr´>']
+  - ['!', '<expr>', '<expr´>']
+  - ['(', '<expr>', ')', '<expr´>']
+<expr´>:
+  - ['<bin_op>', '<expr>', <expr´>]
+  - [null]
 ########################################################
 # ⟨callout_arg⟩ → ⟨expr⟩ | ⟨string_literal⟩
 #######################################################

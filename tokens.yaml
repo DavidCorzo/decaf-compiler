@@ -1,4 +1,4 @@
-'%keyword%': "((i·f)|(e·l·s·e)|(r·e·t·u·r·n)|(f·o·r)|(b·r·e·a·k)|(c·o·n·t·i·n·u·e)|(c·a·l·l·o·u·t)|(d·e·f))"
+'%keyword:value%': "((i·f)|(e·l·s·e)|(r·e·t·u·r·n)|(f·o·r)|(b·r·e·a·k)|(c·o·n·t·i·n·u·e)|(c·a·l·l·o·u·t)|(d·e·f)|(c·l·a·s·s))"
 '%type%': "(i·n·t|b·o·o·l·e·a·n|v·o·i·d)"
 '%bool_literal%': "(t·r·u·e|f·a·l·s·e)"
 '%arith_op%': "+|-|\\*|/|%"

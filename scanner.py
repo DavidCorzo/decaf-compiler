@@ -574,13 +574,13 @@ class scanner:
     def save_automata(self, fa_name):
         with open(fa_name, mode='wb') as file:
             pickle.dump(self.deterministic_finite_automata, file)
-            # file.close()
+            file.close()
     
     def load_automata(self, fa_name):
         with open(fa_name, mode='rb') as file:
             # self.deterministic_finite_automata = pickle.Unpickler(file).load()
             self.deterministic_finite_automata = pickle.load(file)
-            # file.close()
+            file.close()
 
     def next_char(self):
         """
@@ -618,6 +618,14 @@ class scanner:
             if (determ_fa.match(buffer)):
                 return token
         return None
+    
+    def append_to_list_of_token(self, match, token):
+        if (match == None):
+            self.linked_list_of_tokens.append(token)
+        elif (':value' in match[1:-1]):
+            self.linked_list_of_tokens.append(token)
+        else:
+            self.linked_list_of_tokens.append((match, token))
 
     def scan(self):
         """
@@ -630,7 +638,7 @@ class scanner:
                 if buffer != '':
                     match_regex = self.recognize(buffer)
                     if (match_regex):
-                        self.linked_list_of_tokens.append((match_regex, buffer))
+                        self.append_to_list_of_token(match_regex, buffer)
                     else:
                         self.error.no_regex_match(self)
                 buffer = ""
@@ -640,9 +648,10 @@ class scanner:
             elif char in "(){}[];,":
                 if buffer != '':
                     match_regex = self.recognize(buffer)
-                    if match_regex: self.linked_list_of_tokens.append((match_regex, buffer))
+                    if match_regex: 
+                        self.append_to_list_of_token(match_regex, buffer)
                     else: self.error.no_regex_match(self)
-                self.linked_list_of_tokens.append(('<terminal>', char))
+                self.append_to_list_of_token(None, char)
                 buffer = ''
             elif char in "<>=!+-*/":
                 symbol = char
@@ -651,7 +660,8 @@ class scanner:
                     if next_char in "=<>": 
                         symbol += next_char
                 match_regex = self.recognize(symbol)
-                if (match_regex): self.linked_list_of_tokens.append((match_regex, symbol))
+                if (match_regex): 
+                    self.append_to_list_of_token(match_regex, symbol)
                 else: self.error.no_regex_match(self)
                 buffer = ''
             elif char in "\"\'":
@@ -668,13 +678,15 @@ class scanner:
                     elif (char == '\\'):
                         self.content_index += 1
                         char = self.content[self.content_index]
-                        buffer += char
+                        if (char == 'n'):   buffer += '\n'
+                        elif (char == 't'): buffer += '\t'
+                        else:               buffer += char
                     self.content_index += 1
                     self.char_num += 1
                 if (double_quote_detected):
                     self.error.unmatching_doublequotes(self)
                 match_regex = self.recognize(buffer)
-                if (match_regex): self.linked_list_of_tokens.append((match_regex, buffer))
+                if (match_regex): self.append_to_list_of_token(match_regex, buffer)
                 else: self.error.no_regex_match(self)
                 buffer = ''
             else:
@@ -717,11 +729,10 @@ class error_msg:
         print(f"No single quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
         exit(-1)
     
-
 if __name__ == '__main__':
     code = scanner("./src_code.txt", "./tokens.yaml")
     code.produce_automata()
-    # code.save_automata("tokens.pickle")
+    code.save_automata("tokens.pickle")
     # code.load_automata("./tokens.pickle")
     code.scan()
     print(code.linked_list_of_tokens)
