@@ -15,5 +15,19 @@
 #   - ['(', '<E>', ')']
 #   - ['id']
 
-<P>:
-  - ['<E>', '$']
+# class Program {
+#     int a[100], b[67];
+
+#     int add(int x, int y) {
+#         return x + y;
+#     }
+
+#     int main() {
+#         int a;
+#         a = 3;
+#         a += 1;
+#         "this is a string???";
+#         'c';
+#         return add(a, 2);
+#     }
+# }

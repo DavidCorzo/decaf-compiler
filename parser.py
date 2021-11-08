@@ -14,6 +14,9 @@ def is_terminal(string):
 def is_terminal_with_value(string):
     return ((string[0] == '%') and (':' in string[1:-1]) and (string[-1] == '%'))
 
+def print_dict(d):
+    for k,v in d.items(): print(k,v)
+
 def num_label_maker() -> int:
     """
     Generador para poder generar estados únicos. Usados en estados de nfa.
@@ -108,20 +111,29 @@ class lr_0:
             self.items = {}
             index = 0
             for lhs, rhs_l in self.grammar_rules.items():
-                offset = int(bool(lhs != self.start_production))
+                offset = int((lhs != self.start_production))
                 for rhs in rhs_l:
-                    for index_marker in range(len(rhs) + offset):
+                    epsilon_present = int(rhs == [None])
+                    for index_marker in range(len(rhs) + offset - epsilon_present):
                         rhs_item = rhs.copy()
-                        rhs_item.insert(index_marker, '•')
-                        if  (not self.accept_item) and (len(rhs_item) >= 2) and \
-                                (rhs_item[-1] == '$') and (rhs_item[-2] == '•'):
-                            self.accept_item = index
+                        if rhs_item == [None]: 
+                            rhs_item = ['•']
+                            # print(end="")
+                        else:
+                            rhs_item.insert(index_marker, '•')
+                            if  (not self.accept_item) and (len(rhs_item) >= 2) and \
+                                    (rhs_item[-1] == '$') and (rhs_item[-2] == '•'):
+                                self.accept_item = index
                         self.items.update({index : tuple([lhs] + rhs_item)})
                         index += 1
+            # print_dict(self.items)
+            # exit()
             self.reverse_item = {v:k for k,v in self.items.items()}
             self.closed_rules = deepcopy(self.grammar_rules)
             for r1 in self.closed_rules.values():
                 for r2 in r1:
+                    if r2 == [None]:
+                        r2.clear()
                     r2.insert(0, '•')
             for r1, r2 in self.closed_rules.items():
                 self.closed_rules[r1] = [tuple([r1] + x) for x in self.closed_rules[r1]]
@@ -439,8 +451,33 @@ class slr:
         self.index_grammar_rules()
         self.firsts()
         self.follows()
+        # self.unit_test('grammars/example_follow.yaml', 'grammars/example_first.yaml')
         self.construct_slr()
     
+    def unit_test(self, follow_filename, first_file):
+        follow_file = open(follow_filename)
+        first_file  = open(first_file)
+        follow_solutions = safe_load(follow_file)
+        first_solutions  = safe_load(first_file)
+        follow_file.close()
+        first_file.close
+        if (follow_solutions == self.follow_table):
+            print("PASS FOLLOW")
+        else:
+            for k,v in self.follow_table.items():
+                print(k,v)
+            print("FOLLOW SOLUTIONS")
+            for k,v in follow_solutions.items():
+                print(k,v)
+        if (first_solutions == self.firsts_table):
+            print("PASS FIRST")
+        else:
+            for k,v in self.firsts_table.items():
+                print(k,v)
+            print("FIRST SOLUTIONS")
+            for k,v in first_solutions.items():
+                print(k,v)
+
     def index_grammar_rules(self):
         index = 0
         for lhs, rhs_list in self.grammar_rules.items():
@@ -449,9 +486,6 @@ class slr:
                 self.slr_grammar_rules[index] = current_gr
                 self.reverse_slr_grammar_rules[current_gr] = index
                 index += 1
-        # print(self.slr_grammar_rules)
-        # print(self.reverse_slr_grammar_rules)
-                
     
     def firsts(self):
         for lhs in self.grammar_rules.keys():
@@ -459,9 +493,6 @@ class slr:
         pending_firsts = set(self.grammar_rules.keys()) - set(self.firsts_table.keys())
         for lhs in pending_firsts:
             first = self.calculate_firsts(lhs)
-    
-    def get_first_of_non_terminal(self, lhs):
-        return {x[0] for x in self.grammar_rules[lhs]}
     
     def calculate_firsts(self, lhs):
         # lhs is a non terminal
@@ -511,8 +542,7 @@ class slr:
         self.follow_table[self.start_production].add('$')
         for lhs, rhs_list in self.grammar_rules.items():
             for rhs in rhs_list:
-                for rhs_element in range(len(rhs)):
-                    self.calculate_follow(lhs, rhs, rhs_element)
+                self.calculate_follow(lhs, rhs)
         self.make_pending_follows()
     
     def is_nullable(self, production):
@@ -536,21 +566,40 @@ class slr:
         a = all(nullable)
         return a
             
-
-    def calculate_follow(self, lhs, rhs, rhs_index):
-        b = rhs[rhs_index]
-        if not is_nonterminal(b): return
-        beta = None
-        if (rhs_index + 1) < len(rhs):
-            beta = rhs[rhs_index + 1:]
-
-        if beta:
-            dummy = self.follow_table[b]
-            self.first_sequence(b, beta)
-            dummy = self.follow_table[b]
-        if (beta == None) or (self.beta_contains_epsilon(beta)): # 1 production, is the last one
-            if b != lhs:
-                self.follow_pending_stack.append((b, lhs))
+    def calculate_follow(self, lhs, rhs):
+        ft = self.follow_table
+        for B_i in range(len(rhs)):
+            B, beta = rhs[B_i], None
+            if is_nonterminal(B):
+                if (B_i + 1) < len(rhs):
+                    beta = rhs[(B_i + 1):]
+                    firsts = self.get_first(beta)
+                    self.follow_table[B] |= firsts - {None}
+                    if None in firsts:
+                        if lhs != B: self.follow_pending_stack.append((B, lhs))
+                else:
+                    if lhs != B: self.follow_pending_stack.append((B, lhs))
+            else:
+                continue
+    
+    def get_first(self, beta):
+        first, index = set(), 0
+        for b in beta:
+            f = set()
+            if is_nonterminal(b):
+                f |= self.firsts_table[b]
+            else:
+                first.add(b)
+                break
+            if None not in f:
+                first |= f
+                break
+            if index != (len(beta) - 1):
+                first |= f - {None}
+            else:
+                first |= f
+            index += 1
+        return first
             
     def make_pending_follows(self):
         for pf in self.follow_pending_stack:
@@ -567,7 +616,6 @@ class slr:
                     self.slr_parsing_table[state][transition_token] = tuple([GOTO, next_state])
                 else: # terminal, therefore action
                     self.slr_parsing_table[state][transition_token] = tuple([SHIFT, next_state])
-        # print(self.follow_table)
         for leaf_state in self.leaf_states:
             state = self.reveresed_renamed_states[leaf_state]
             for item in state:
@@ -586,61 +634,98 @@ class slr:
                             print(f"ERROR (Shift Reduce/Reduce Reduce conflict): {f} already in parsing table as shift, {self.slr_parsing_table[leaf_state]}, prod_i={reduce_production_index}, prod={reduce_production}")
                             print(f"already={self.slr_grammar_rules[self.slr_parsing_table[leaf_state][f][1]]}, new={self.slr_grammar_rules[reduce_production_index]}")
                             exit()
-        # print(self.slr_parsing_table)
+        print(self.states)
+        print(self.leaf_states)
+        print(self.slr_parsing_table)
+        exit()
 
+PARENT, CHILDREN, PTR = 0, 1, 1
 class parser:
     def __init__(self, slr_table:slr, lexed_tokens):
         self.slr_parsing_table  = slr_table.slr_parsing_table
+        self.slr_grammar_rules  = slr_table.slr_grammar_rules
         self.productions_tree   = dict()
         self.state_stack        = list()
         self.productions_stack  = list()
         self.lexed_tokens       = lexed_tokens
+        self.production_label   = num_label_maker()
         self.parse()
-
-    def shift(self):
-        pass
-    
-    def reduce(self):
-        pass
-    
-    def goto(self):
-        pass
 
     def error(self):
         print("ERROR: NO OPERATION FOR THE SYMBOL.")
         error(-1)
+        exit(-1)
+    
+    def reduce(self, rule):
+        st, ps, pt = self.state_stack, self.productions_stack, self.productions_tree
+        prod = self.slr_grammar_rules[rule]
+        lhs = prod[LHS]
+        rhs = prod[RHS:]
+        current_node_id = next(self.production_label)
+        self.productions_tree[current_node_id] = tuple([lhs, list()])
+        cn = self.productions_tree[current_node_id]
+        for x in range(len(rhs)):
+            self.productions_tree[current_node_id][CHILDREN].insert(0, self.productions_stack.pop()[PTR])
+            self.state_stack.pop()
+        self.productions_stack.append((lhs, current_node_id))
+        7
+    
+    def goto(self):
+        pass
+
+    def shift(self, next_state, element):
+        ss, ps, pt = self.state_stack, self.productions_stack, self.productions_tree
+        self.state_stack.append(next_state)
+        l = next(self.production_label)
+        t, v = element
+        if (t == None):
+            self.productions_tree[l] = (v, None)
+            self.productions_stack.append((v, l))
+        else:
+            self.productions_tree[l] = (v, None)
+            element = (t, l)
+            self.productions_stack.append((t, l))
+        print(f"productions_stack={self.productions_stack}")
+        print(f"productions_tree={self.productions_tree}")
+        1
     
     def parse(self):
-        ss = self.state_stack
+        ss, ps = self.state_stack, self.productions_stack
         self.state_stack.append(0)
         accept = False
         index = 0
         while not accept:
-            token = self.lexed_tokens[index]
-            operation = next = None
+            token, value = self.lexed_tokens[index]
+            if token == None: token = value
+            operation = param = None
             # if it exists
-            if self.slr_parsing_table[self.state_stack[-1]].get(token):
-                operation, next = self.slr_parsing_table[self.state_stack[-1]][token]
+            s = self.slr_parsing_table[self.state_stack[-1]]
+            top = self.state_stack[-1]
+            if self.slr_parsing_table[top].get(token):
+                operation, param = self.slr_parsing_table[top][token]
             else:
                 self.error()
             # operation found
             if  operation == SHIFT:
-                pass
+                self.shift(param, self.lexed_tokens[index])
             elif operation == REDUCE:
-                pass
+                self.reduce(param)
+                continue # do not increment the symbol
             elif operation == ACCEPT:
                 accept = True
+            index += 1
 
 
-# code = scanner("./src_code.txt", "./tokens.yaml")
+code = scanner("./src_code.txt", "./tokens.yaml")
 # code.produce_automata()
 # code.save_automata("tokens.pickle")
-# code.load_automata("./tokens.pickle")
-# code.scan()
+code.load_automata("./tokens.pickle")
+code.scan()
+
 # print(code.linked_list_of_tokens)
-
-lexed_tokens = ['class', ('%id%', 'Program'), '{', 'def', ('%type%', 'int'), ('%id%', 'add'), '(', ('%type%', 'int'), ('%id%', 'x'), ',', ('%type%', 'int'), ('%id%', 'y'), ')', '{', 'return', ('%id%', 'x'), ('%arith_op%', '+'), ('%id%', 'y'), ';', '}', 'def', ('%type%', 'int'), ('%id%', 'main'), '(', ')', '{', ('%type%', 'int'), ('%id%', 'a'), ';', ('%id%', 'a'), ('%assign_op%', '='), ('%int_literal%', '3'), ';', ('%id%', 'a'), ('%assign_op%', '+='), ('%assign_op%', '='), ('%int_literal%', '1'), ';', ('%string_literal%', '"this is a string???"'), ';', ('%char_literal%', "'c'"), ';', 'return', ('%id%', 'add'), '(', ('%id%', 'a'), ',', ('%int_literal%', '2'), ')', ';', '}', '}']
-
-l = lr_0('<program>', 'productions.yaml', build=True)
+l = lr_0('<program>', 'productions.yaml', build=True, save=True)
+# print(l)
+# for k,v in l.items.items():
+#     print(k,v)
 s = slr(l)
-p = parser(s, lexed_tokens)
+p = parser(s, code.linked_list_of_tokens)
