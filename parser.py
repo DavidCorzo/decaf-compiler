@@ -60,6 +60,7 @@ class lr_0:
             self.load_grammar()
             self.closures()
             self.create_states()
+            # print_dict(self.items)
         else:
             self.load_lr_0_dfa()
         if save: 
@@ -111,18 +112,17 @@ class lr_0:
             self.items = {}
             index = 0
             for lhs, rhs_l in self.grammar_rules.items():
-                offset = int((lhs != self.start_production))
+                # offset = int((lhs != self.start_production))
                 for rhs in rhs_l:
-                    epsilon_present = int(rhs == [None])
-                    for index_marker in range(len(rhs) + offset - epsilon_present):
+                    # epsilon_present = int(rhs == [None])
+                    for index_marker in range(len(rhs) + 1):
                         rhs_item = rhs.copy()
                         if rhs_item == [None]: 
                             rhs_item = ['•']
-                            # print(end="")
                         else:
                             rhs_item.insert(index_marker, '•')
                             if  (not self.accept_item) and (len(rhs_item) >= 2) and \
-                                    (rhs_item[-1] == '$') and (rhs_item[-2] == '•'):
+                                    (rhs_item[-2] == '$') and (rhs_item[-1] == '•'):
                                 self.accept_item = index
                         self.items.update({index : tuple([lhs] + rhs_item)})
                         index += 1
@@ -318,7 +318,10 @@ class lr_0:
             state = self.reveresed_renamed_states[state]
             for item_i in state:
                 item = self.items[item_i]
-                s += f"{item[LHS]} -> {' '.join(map(str, item[RHS:]))}\n"
+                s += f"{item[LHS]} -> "
+                for i in item[RHS:]:
+                    s += i + ' '
+                s += '\n'
             s += f"{transitions}\n\n"
         return s
     
@@ -363,11 +366,11 @@ class lr_0:
             dot_pos = rhs.index('•')
             if (dot_pos + 1) < len(rhs):
                 after_dot = rhs[dot_pos + 1]
-                if (after_dot != '$'):
-                    if transitions.get(after_dot):
-                        transitions[after_dot].add(self.reverse_item[item])
-                    else:
-                        transitions[after_dot] = set([self.reverse_item[item]])
+                # if (after_dot != '$'):
+                if transitions.get(after_dot):
+                    transitions[after_dot].add(self.reverse_item[item])
+                else:
+                    transitions[after_dot] = set([self.reverse_item[item]])
         for transition, item_set in transitions.items():
             next_items = set()
             for it in item_set:
@@ -388,14 +391,14 @@ class lr_0:
         dot_pos = rhs.index('•')
         if (dot_pos + 1) < len(rhs):
             after_dot = rhs[dot_pos + 1]
-            if after_dot == '$':
-                return None
-            else:
-                item = list(item)
-                dot_pos = item.index('•')
-                item.remove('•')
-                item.insert(dot_pos + 1, '•')
-                return self.reverse_item[tuple(item)]
+            # if after_dot == '$':
+            #     return None
+            # else:
+            item = list(item)
+            dot_pos = item.index('•')
+            item.remove('•')
+            item.insert(dot_pos + 1, '•')
+            return self.reverse_item[tuple(item)]
         else:
             return None
     
@@ -503,6 +506,7 @@ class slr:
         first = set()
         for rhs in rhs_list:
             rhs_element_index = 0
+            self.detect_left_recursion(lhs, rhs_list[0])
             for rhs_element in rhs:
                 f = set()
                 if is_nonterminal(rhs_element):
@@ -526,6 +530,11 @@ class slr:
         else:
             self.firsts_table[lhs] = first
         return first
+    
+    def detect_left_recursion(self, lhs, first_rhs):
+        if (lhs == first_rhs):
+            print(f"LEFT RECURSION DETECTED AT {lhs}")
+            exit(-1)
     
     def calculate_feasable_first(self, lhs):
         non_terminals = set()
@@ -608,9 +617,10 @@ class slr:
     def construct_slr(self):
         self.slr_parsing_table = {k:{} for k in self.index_to_states.keys()}
         for state, transitions in self.states.items():
-            if state == self.accept_state:
-                self.slr_parsing_table[state]['$'] = tuple([ACCEPT, 0])
-                continue
+            # if state == self.accept_state:
+            #     print(self.accept_state, state)
+            #     self.slr_parsing_table[state]['$'] = tuple([ACCEPT, 0])
+            #     continue
             for transition_token, next_state in transitions.items():
                 if is_nonterminal(transition_token): # nonterminal, therefore goto
                     self.slr_parsing_table[state][transition_token] = tuple([GOTO, next_state])
@@ -634,14 +644,12 @@ class slr:
                             print(f"ERROR (Shift Reduce/Reduce Reduce conflict): {f} already in parsing table as shift, {self.slr_parsing_table[leaf_state]}, prod_i={reduce_production_index}, prod={reduce_production}")
                             print(f"already={self.slr_grammar_rules[self.slr_parsing_table[leaf_state][f][1]]}, new={self.slr_grammar_rules[reduce_production_index]}")
                             exit()
-        print(self.states)
-        print(self.leaf_states)
-        print(self.slr_parsing_table)
-        exit()
 
 PARENT, CHILDREN, PTR = 0, 1, 1
 class parser:
     def __init__(self, slr_table:slr, lexed_tokens):
+        self.start_production   = slr_table.start_production
+        self.states             = slr_table.states
         self.slr_parsing_table  = slr_table.slr_parsing_table
         self.slr_grammar_rules  = slr_table.slr_grammar_rules
         self.productions_tree   = dict()
@@ -651,8 +659,8 @@ class parser:
         self.production_label   = num_label_maker()
         self.parse()
 
-    def error(self):
-        print("ERROR: NO OPERATION FOR THE SYMBOL.")
+    def error(self, symbol):
+        print(f"ERROR: NO OPERATION FOR THE SYMBOL {symbol}")
         error(-1)
         exit(-1)
     
@@ -668,10 +676,23 @@ class parser:
             self.productions_tree[current_node_id][CHILDREN].insert(0, self.productions_stack.pop()[PTR])
             self.state_stack.pop()
         self.productions_stack.append((lhs, current_node_id))
-        7
+        if (len(self.productions_stack) == 1) and (self.productions_stack[-1][PARENT] == self.start_production):
+            return
+        self.goto(lhs)
     
-    def goto(self):
-        pass
+    def goto(self, non_terminal):
+        ss, ps, pt = self.state_stack, self.productions_stack, self.productions_tree
+        if is_nonterminal(non_terminal):
+            current_state   = self.state_stack[-1]
+            operation, next_state  = self.slr_parsing_table[current_state][non_terminal]
+            if (operation == GOTO): 
+                self.state_stack.append(next_state)
+            else: 
+                print("GOTO not applicable")
+                exit(-1)
+        else:
+            print("ERROR: TERMINAL CALLED ON GOTO")
+            exit(-1)
 
     def shift(self, next_state, element):
         ss, ps, pt = self.state_stack, self.productions_stack, self.productions_tree
@@ -685,35 +706,42 @@ class parser:
             self.productions_tree[l] = (v, None)
             element = (t, l)
             self.productions_stack.append((t, l))
-        print(f"productions_stack={self.productions_stack}")
-        print(f"productions_tree={self.productions_tree}")
-        1
+        # print(f"productions_stack={self.productions_stack}")
+        # print(f"productions_tree={self.productions_tree}")
+        # 1
     
     def parse(self):
         ss, ps = self.state_stack, self.productions_stack
         self.state_stack.append(0)
-        accept = False
         index = 0
-        while not accept:
+        # print_dict(self.states)
+        print_dict(self.slr_parsing_table)
+        # exit()
+        while True:
+            if (len(self.productions_stack) == 1) and (self.productions_stack[-1][PARENT] == self.start_production):
+                print("SUCCESS")
+                break
             token, value = self.lexed_tokens[index]
             if token == None: token = value
             operation = param = None
             # if it exists
-            s = self.slr_parsing_table[self.state_stack[-1]]
             top = self.state_stack[-1]
+            s = self.slr_parsing_table[top]
+            print(self.productions_stack)
             if self.slr_parsing_table[top].get(token):
                 operation, param = self.slr_parsing_table[top][token]
             else:
-                self.error()
+                self.error(token)
             # operation found
             if  operation == SHIFT:
                 self.shift(param, self.lexed_tokens[index])
+                if (index + 1) < len(self.lexed_tokens):
+                    index += 1
             elif operation == REDUCE:
                 self.reduce(param)
-                continue # do not increment the symbol
-            elif operation == ACCEPT:
-                accept = True
-            index += 1
+        print(self.state_stack)
+        print(self.productions_stack)
+        print(self.productions_tree)
 
 
 code = scanner("./src_code.txt", "./tokens.yaml")
@@ -721,10 +749,12 @@ code = scanner("./src_code.txt", "./tokens.yaml")
 # code.save_automata("tokens.pickle")
 code.load_automata("./tokens.pickle")
 code.scan()
+code.linked_list_of_tokens.append((None, '$'))
 
 # print(code.linked_list_of_tokens)
-l = lr_0('<program>', 'productions.yaml', build=True, save=True)
-# print(l)
+l = lr_0('<program>', 'productions.yaml', build=True, save=False)
+print(l)
+print(l.states)
 # for k,v in l.items.items():
 #     print(k,v)
 s = slr(l)
