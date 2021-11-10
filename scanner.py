@@ -631,6 +631,10 @@ class scanner:
         buffer = ""
         while (self.content_index < len(self.content)):
             char = self.content[self.content_index]
+            if char == '#': # comment
+                while char != '\n':
+                    self.content_index += 1
+                    char = self.content[self.content_index]
             if (char in " \n\t"):
                 if buffer != '':
                     match_regex = self.recognize(buffer)

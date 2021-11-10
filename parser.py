@@ -398,6 +398,7 @@ class slr:
         self.slr_stack                  = list()
         self.slr_grammar_rules          = dict()
         self.reverse_slr_grammar_rules  = dict()
+        self.productions_tree_head      = None
         self.index_grammar_rules()
         # self.firsts()
         # self.follows()
@@ -597,7 +598,6 @@ class parser:
     def __init__(self, slr_table:slr, lexed_tokens):
         self.start_production   = slr_table.start_production
         self.e_reduce           = None
-        self.states             = slr_table.states
         self.slr_parsing_table  = slr_table.slr_parsing_table
         self.slr_grammar_rules  = slr_table.slr_grammar_rules
         self.productions_tree   = dict()
@@ -624,7 +624,8 @@ class parser:
             self.productions_tree[current_node_id] = tuple([lhs, list()])
             cn = self.productions_tree[current_node_id]
             for x in range(len(rhs)):
-                self.productions_tree[current_node_id][CHILDREN].insert(0, self.productions_stack.pop()[PTR])
+                ptr = self.productions_stack.pop()[PTR]
+                if ptr: self.productions_tree[current_node_id][CHILDREN].insert(0, ptr)
                 self.state_stack.pop()
             self.productions_stack.append((lhs, current_node_id))
             if (len(self.productions_stack) == 1) and (self.productions_stack[-1][PARENT] == self.start_production):
@@ -638,6 +639,7 @@ class parser:
             operation, next_state  = self.slr_parsing_table[current_state][non_terminal]
             if (operation == GOTO): 
                 self.state_stack.append(next_state)
+                pass
             else: 
                 print("GOTO not applicable")
                 exit(-1)
@@ -648,29 +650,25 @@ class parser:
     def shift(self, next_state, element):
         ss, ps, pt = self.state_stack, self.productions_stack, self.productions_tree
         self.state_stack.append(next_state)
-        l = next(self.production_label)
+        tree_element_index = next(self.production_label)
         t, v = element
         if (t == None):
-            self.productions_tree[l] = (v, None)
-            self.productions_stack.append((v, l))
+            self.productions_tree[tree_element_index] = (v, None)
+            self.productions_stack.append((v, tree_element_index))
         else:
-            self.productions_tree[l] = (v, None)
-            element = (t, l)
-            self.productions_stack.append((t, l))
-        # print(f"productions_stack={self.productions_stack}")
-        # print(f"productions_tree={self.productions_tree}")
-        # 1
+            self.productions_tree[tree_element_index] = (v, None)
+            element = (t, tree_element_index)
+            percentage_element = next(self.production_label)
+            self.productions_tree[percentage_element] = (t, tree_element_index)
+            self.productions_stack.append((t, percentage_element))
     
     def parse(self):
-        ss, ps = self.state_stack, self.productions_stack
         self.state_stack.append(0)
         index = 0
         lt = self.lexed_tokens
-        print_dict(self.slr_parsing_table)
-        # exit()
         while True:
             if (len(self.productions_stack) == 1) and (self.productions_stack[-1][PARENT] == self.start_production):
-                pass
+                self.productions_tree_head = self.productions_stack[-1][CHILDREN]
                 break
             token, value = self.lexed_tokens[index]
             if token == None: token = value
@@ -678,7 +676,6 @@ class parser:
             # if it exists
             top = self.state_stack[-1]
             s = self.slr_parsing_table[top]
-            print(self.productions_stack)
             if self.slr_parsing_table[top].get(token):
                 operation, param = self.slr_parsing_table[top][token]
             elif self.slr_parsing_table[top].get(None):
@@ -694,22 +691,18 @@ class parser:
                 self.reduce(param)
             else:
                 self.goto(self.productions_stack[-1][PARENT])
-        print('*'*100)
-        print(self.productions_stack)
+            print(self.productions_stack)
+            pass
         print(self.productions_tree)
 
 
 code = scanner("./src_code.txt", "./tokens.yaml")
 code.produce_automata()
 code.save_automata("tokens.pickle")
-# code.load_automata("./tokens.pickle")
 code.scan()
 code.linked_list_of_tokens.append((None, '$'))
 
 # print(code.linked_list_of_tokens)
-# print(code.linked_list_of_tokens)
 l = lr_0('<program>', 'productions.yaml', build=1, save=1)
 s = slr(l)
-# # [(None, 'a'), (None, 'a'), (None, 'b'), (None, 'b'), (None, '$')]
 p = parser(s, code.linked_list_of_tokens)
-# print(p.productions_tree)

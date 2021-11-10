@@ -1,7 +1,13 @@
 <program>:
   - ['<program">', '$']
 <program">:
+  - ['class', '%id%', '{', '<field_decl*>', '<method_decl*>', '}']
   - ['class', '%id%', '{', '<field_decl*>', '}']
+  - ['class', '%id%', '{', '<method_decl*>', '}']
+  - ['class', '%id%', '{', '}']
+###############
+# <field_decl*>
+###############
 <field_decl*>:
   - ['%type%', '<field_decl>', '<field_decl*_aux>']
 <field_decl*_aux>:
@@ -9,10 +15,123 @@
   - [null]
 <field_decl>:
   - ['%id%', '<subscript>',';']
-  - ['%id%', '<subscript>', '<comma_vars>', ';']
-<comma_vars>:
-  - [',', '%id%', '<subscript>', '<comma_vars>']
+  - ['%id%', '<subscript>', '<var_array_list>', ';']
+<var_array_list>:
+  - [',', '%id%', '<subscript>', '<var_array_list>']
   - [null]
 <subscript>:
   - ['[', '%int_literal%', ']']
   - [null]
+###############
+# <method_decl*>
+###############
+<method_decl*>:
+  - ['<type|void>', '%id%', '(', '<method_args>', ')', '<block>', '<method_decl*_aux>']
+<method_decl*_aux>:
+  - ['<method_decl*>', <method_decl*_aux>]
+  - [null]
+<type|void>:
+  - ['%type%']
+  - ['void']
+<method_args>:
+  - ['%type%', '%id%', '<method_args">']
+  - [null]
+<method_args">:
+  - [',', '%type%', '%id%', '<method_args">']
+  - [null]
+###############
+# <block>
+###############
+<block>:
+  - ['{', '<var_decl*>', '<statement*>', '}']
+<var_decl*>:
+  - ['<var_decl>', '<var_decl*>']
+  - [null]
+<statement*>:
+  - ['<statement>', '<statement*>']
+  - [null]
+###############
+# <var_decl>
+###############
+<var_decl>:
+  - ['%type%', '%id%', '<args_list>', ';']
+<args_list>:
+  - [',', '%type%', '%id%', '<args_list>']
+  - [null]
+###############
+# <statement>
+###############
+<statement>:
+  - ['<location>', '%assign_op%', '<expr>', ';']
+  - ['<method_call>', ';']
+  - ['if', '(', '<expr>', ')', '<block>', '<else_block>']
+  # - ['for', '%id%', '=', '<expr>']
+  - ['return', ';']
+  - ['return', '<expr>', ';']
+  - ['break', ';']
+  - ['continue', ';']
+  - ['<block>']
+<else_block>:
+  - ['else', '<block>']
+  - [null]
+###############
+# <method_call>
+###############
+<method_call>:
+  - ['<method_name>', '(', ')']
+  - ['<method_name>', '(', '<comma_expr>', ')']
+  - ['callout', '(', '%string_literal%', ')']
+  - ['callout', '(', '%string_literal%', ',', '<comma_callout_arg>', ')']
+<comma_expr>:
+  - ['<expr>', '<comma_expr">']
+<comma_expr">:
+  - [',', '<expr>', '<comma_expr>']
+  - [null]
+<comma_callout_arg>:
+  - ['<callout_arg>', <comma_callout_arg">]
+<comma_callout_arg">:
+  - [',', '<callout_arg>', '<comma_callout_arg">']
+  - [null]
+###############
+# <method_name>
+###############
+<method_name>:
+  - ['%id%']
+###############
+# <expr>
+###############
+<expr>:
+  - ['<location>']
+  - ['<method_call>']
+  - ['<literal>']
+  - ['<expr>', '<bin_op>', '<expr>']
+  - ['-', '<expr>']
+  - ['!', '<expr>']
+  - ['(', '<expr>', ')']
+###############
+# <location>
+###############
+<location>:
+  - ['%id%']
+  - ['%id%', '[', '<expr>', ']']
+###############
+# <callout_arg>
+###############
+<callout_arg>:
+  - ['<expr>']
+  - ['%string_literal%']
+###############
+# <bin_op>
+###############
+<bin_op>:
+  - ['%arith_op%']
+  - ['%rel_op%']
+  - ['%eq_op%']
+  - ['%cond_op%']
+###############
+# <literal>
+###############
+<literal>:
+  - ['%int_literal%']
+  - ['%char_literal%']
+  - ['%bool_literal%']

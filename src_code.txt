@@ -1,4 +1,18 @@
 class Program {
-    int a, b[100];
     boolean y;
+    int j;
+    
+    void main() {
+        
+    }
+
+    int hello(int h, boolean k) {
+        boolean u;
+        if (true) {}
+        #     y = (1 + 2 * (8 + 9));
+        # } 
+        # else {
+        #     y = 0
+        # }
+    }
 }
