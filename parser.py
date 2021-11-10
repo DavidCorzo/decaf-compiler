@@ -47,6 +47,10 @@ class lr_0:
         self.reveresed_renamed_states           = dict()
         self.leaf_states                        = set()
         self.accept_state                       = None
+        self.terminals                          = set()
+        self.nonterminals                       = set()
+        self.epsilon_items                      = set()
+        self.epsilon_states                     = dict()
         if build:
             # attributes
             self.closed_rules                   = None
@@ -109,13 +113,18 @@ class lr_0:
         """
         with open(self.productions_filename) as file:
             self.grammar_rules = safe_load(file)
+            # get terminals
+            for rhs_list in self.grammar_rules.values():
+                for rhs in rhs_list:
+                    for rhs_element in rhs:
+                        if is_nonterminal(rhs_element): self.nonterminals.add(rhs_element)
+                        else: self.terminals.add(rhs_element)
             self.items = {}
             index = 0
             for lhs, rhs_l in self.grammar_rules.items():
-                # offset = int((lhs != self.start_production))
                 for rhs in rhs_l:
-                    # epsilon_present = int(rhs == [None])
-                    for index_marker in range(len(rhs) + 1):
+                    epsilon_present = int(rhs == [None])
+                    for index_marker in range(len(rhs) + 1 - epsilon_present):
                         rhs_item = rhs.copy()
                         if rhs_item == [None]: 
                             rhs_item = ['•']
@@ -126,8 +135,6 @@ class lr_0:
                                 self.accept_item = index
                         self.items.update({index : tuple([lhs] + rhs_item)})
                         index += 1
-            # print_dict(self.items)
-            # exit()
             self.reverse_item = {v:k for k,v in self.items.items()}
             self.closed_rules = deepcopy(self.grammar_rules)
             for r1 in self.closed_rules.values():
@@ -138,6 +145,9 @@ class lr_0:
             for r1, r2 in self.closed_rules.items():
                 self.closed_rules[r1] = [tuple([r1] + x) for x in self.closed_rules[r1]]
             self.closed_indexes = {k:set([self.reverse_item[x] for x in v]) for k,v in self.closed_rules.items()}
+            for index, item in self.items.items():
+                if (len(item) == 2) and (item[RHS] == '•'):
+                    self.epsilon_items.add(index)
             file.close()
     
     def closures(self):
@@ -191,6 +201,7 @@ class lr_0:
         6. Recursive call, we make the recursive call, the set_of_items in this one is the pending_items set, we do this to check 
             if any other item we added has a '•' followed by a non terminal that needs closure.
         """
+        
         self.closure_of_current_item |= set_of_indexes
         actual_items = {self.items[ai] for ai in set_of_indexes}
         pending_productions = set()
@@ -235,81 +246,6 @@ class lr_0:
             are already states, but we do not know this until we replace them for the closed states.
         """
         self.create_state(set([0]))
-        
-    # def create_state(self, set_of_items):
-    #     """
-    #     This function is called create_state, but in reality the recursion it has creates all the states.
-    #     1.  We are sent a set of items as a set of indexes. We need to know the closure of all of those items.
-    #         We just look up the closure_table for the item closure we need and we get the closure from there.
-    #         When all the items have been performed closure on we simply add them to the closure_of_items set.
-    #     2. items_tuple: The items tuple simply stores the items it passed in in set form as a tuple to later 
-    #         store them in the self.closures_to_states, this is to transform the transitions later on, because
-    #         the transitions are going to be left unclosed.
-    #     3. state_key: The closure_of_items forms a state in our DFA, therefore we see in the self.states dictionary 
-    #         if there is any state with that tuple (sort the tuple because a tuple like (1,2) is not equal to (2,1)).
-    #     4. If the item 0 is present in the set_of_items passed in as arguments then that state is the start state.
-    #     5. if we have not registered the unclosed state in the self.closures_to_states dictionary we must do so
-    #         and continue executing the rest of the function.
-    #     6. If we have registered the unclosed state to the self.closures_to_states dictionary then we have arrived 
-    #         at a base case and return the value of the dictionary at key=items_tuple of self.closures_to_states.
-    #     7. If we did not arrive at a base case then we need to get the actual items from the indexes that were passed 
-    #         in, in this case we store them in the actual_items set.
-    #     8. If the state_key has been registered as a state then we return the state_key. This is our second base case.
-    #     9. If we have failed to terminate recursion for any of the two base cases then we continue and calculate the 
-    #         transitions of the current state, we start by iterating over the actual_items set. 
-    #         - separate the lhs from the rhs.
-    #         - figure out the index of the '•'
-    #         - see if the dot is not the last element of the list, if it is not then access 
-    #             the element next to it. 
-    #         - If there is a next element and that next element is not '$' then we register a 
-    #             transition.
-    #     10. We then need to iterate for every transition we found. 
-    #         - the items we found are the current ones, we need to advance the dot by one
-    #             so if we have a transition to ('<S>', <T>, '•', '(', ')') we need the item 
-    #             index corresponding to ('<S>', <T>, '(', '•', ')')
-    #         - the next_items are unclosed states that we add with the transition. Therefore 
-    #             we can make the recursive call with those items as the next set of items.
-    #     11. If there are no transitions then we have arrived to the third base case and we 
-    #         cut the recursion.
-    #     12. If there are transitions then we need to process them: 
-    #         - First we check if the state already exists and if it does not we add it to the 
-    #             self.states dictionary, both the new state_key and the transitions from that 
-    #             state.
-    #         - For each transition we check if we have not yet made it in the self.closures_to_states 
-    #             if we have then we ignore, because we have already made that state, otherwise we must 
-    #             make the recursive call and end once we are at a leaf node.
-    #     """
-        # closure_of_items = set()
-        # for coi in set_of_items: closure_of_items |= self.closure_table[coi]
-        # items_tuple = tuple(sorted(set_of_items))
-        # state_key = tuple(sorted(closure_of_items))
-        # if 0 in set_of_items: self.start_state = deepcopy(state_key)
-        # # register that we are going to calculate this in this iteration.
-        # if not self.closures_to_states.get(items_tuple): self.closures_to_states[items_tuple] = state_key
-        # # this pair of items has already been calculated
-        # else:  return self.closures_to_states[items_tuple]
-        # actual_items = {self.items[ai] for ai in closure_of_items}
-        # if self.states.get(state_key): return state_key
-        # transitions = dict()
-        # for item in actual_items:
-        #     lhs = item[LHS]
-        #     rhs = item[RHS:]
-        #     dot_pos = rhs.index('•')
-        #     if (dot_pos + 1) < len(rhs):
-        #         after_dot = rhs[dot_pos + 1]
-        #         if (after_dot != '$'):
-        #             if transitions.get(after_dot):
-        #                 transitions[after_dot].add(self.reverse_item[item])
-        #             else:
-        #                 transitions[after_dot] = set([self.reverse_item[item]])
-        # if len(transitions) == 0: return state_key
-        # transitions = self.calculate_transitions(transitions)
-        # if not (self.states.get(state_key)):
-        #     self.states[state_key] = transitions
-        # for transition, new_state in self.states[state_key].items():
-        #     possible_state_key = tuple(sorted(new_state))
-        #     if possible_state_key not in self.closures_to_states.keys():
-        #         self.create_state(new_state)
     
     def __repr__(self) -> str:
         s = str()
@@ -335,6 +271,7 @@ class lr_0:
         if self.renamed_states.get(state_key):
             return self.renamed_states[state_key]
         renamed_state = self.get_or_create_renamed_state(state_key)
+        self.determine_epsilon_states(state_key, renamed_state)
         transitions = self.calculate_transitions(self.get_actual_items(state_key))
         if len(transitions) == 0:
             if (self.accept_item in state_key): 
@@ -347,6 +284,15 @@ class lr_0:
         for token, next_unclosed_state in self.states[renamed_state].items():
             self.states[renamed_state][token] = self.create_state(next_unclosed_state)
         return renamed_state
+    
+    def determine_epsilon_states(self, state_key, renamed_state):
+        epsilon_state = set(state_key) & self.epsilon_items
+        if len(epsilon_state) > 0:
+            if len(epsilon_state) != 1:
+                print("REDUCE REDUCE BY TWO PRODUCTIONS ON EPSILON")
+                exit(-1)
+            self.epsilon_states[renamed_state] = list(epsilon_state)[0]
+            
 
     def get_or_create_renamed_state(self, state_key):
         if self.renamed_states.get(state_key):
@@ -391,9 +337,6 @@ class lr_0:
         dot_pos = rhs.index('•')
         if (dot_pos + 1) < len(rhs):
             after_dot = rhs[dot_pos + 1]
-            # if after_dot == '$':
-            #     return None
-            # else:
             item = list(item)
             dot_pos = item.index('•')
             item.remove('•')
@@ -433,6 +376,10 @@ class lr_0:
 SHIFT, REDUCE, GOTO, ACCEPT = 'S', 'R', 'G', 'A'
 class slr:
     def __init__(self, lr_0_assembled:lr_0):
+        self.lr_0                       = lr_0_assembled
+        self.epsilon_states             = lr_0_assembled.epsilon_states
+        self.epsilon_items              = lr_0_assembled.epsilon_items
+        self.terminals                  = lr_0_assembled.terminals
         self.grammar_rules              = lr_0_assembled.grammar_rules
         self.states                     = lr_0_assembled.states
         self.reveresed_renamed_states   = lr_0_assembled.reveresed_renamed_states
@@ -452,8 +399,8 @@ class slr:
         self.slr_grammar_rules          = dict()
         self.reverse_slr_grammar_rules  = dict()
         self.index_grammar_rules()
-        self.firsts()
-        self.follows()
+        # self.firsts()
+        # self.follows()
         # self.unit_test('grammars/example_follow.yaml', 'grammars/example_first.yaml')
         self.construct_slr()
     
@@ -617,10 +564,6 @@ class slr:
     def construct_slr(self):
         self.slr_parsing_table = {k:{} for k in self.index_to_states.keys()}
         for state, transitions in self.states.items():
-            # if state == self.accept_state:
-            #     print(self.accept_state, state)
-            #     self.slr_parsing_table[state]['$'] = tuple([ACCEPT, 0])
-            #     continue
             for transition_token, next_state in transitions.items():
                 if is_nonterminal(transition_token): # nonterminal, therefore goto
                     self.slr_parsing_table[state][transition_token] = tuple([GOTO, next_state])
@@ -632,23 +575,28 @@ class slr:
                 reduce_production = list(self.items[item])
                 reduce_production.remove('•')
                 reduce_production_index = self.reverse_slr_grammar_rules[tuple(reduce_production)]
-                follow = self.follow_table[reduce_production[LHS]]
-                for f in follow:
-                    if not self.slr_parsing_table[leaf_state].get(f):
-                        self.slr_parsing_table[leaf_state][f] = tuple([REDUCE, reduce_production_index])
+                for p in self.terminals:
+                    if not self.slr_parsing_table[leaf_state].get(p):
+                        self.slr_parsing_table[leaf_state][p] = tuple([REDUCE, reduce_production_index])
                     else:
-                        if self.slr_parsing_table[leaf_state][f][0] == ACCEPT:
-                            continue
-                        else:
-                            # reduce reduce / shift reduce / shift shift comflict
-                            print(f"ERROR (Shift Reduce/Reduce Reduce conflict): {f} already in parsing table as shift, {self.slr_parsing_table[leaf_state]}, prod_i={reduce_production_index}, prod={reduce_production}")
-                            print(f"already={self.slr_grammar_rules[self.slr_parsing_table[leaf_state][f][1]]}, new={self.slr_grammar_rules[reduce_production_index]}")
-                            exit()
-
+                        print("ERROR IN SLR PARSING TABLE, POSITION ALREADY OCCUPIED")
+                        exit(-1)
+        for state, item in self.epsilon_states.items():
+            reduce_production = list(self.items[item])
+            reduce_production.remove('•')
+            reduce_production.append(None)
+            reduce_production_index = self.reverse_slr_grammar_rules[tuple(reduce_production)]
+            if not self.slr_parsing_table[state].get(None):
+                self.slr_parsing_table[state][None] = tuple([REDUCE, reduce_production_index])
+            else:
+                print("ERROR IN SLR EPSILON PARSING STATE, POSITION ALREADY OCCUPIED")
+                exit(-1)
+        
 PARENT, CHILDREN, PTR = 0, 1, 1
 class parser:
     def __init__(self, slr_table:slr, lexed_tokens):
         self.start_production   = slr_table.start_production
+        self.e_reduce           = None
         self.states             = slr_table.states
         self.slr_parsing_table  = slr_table.slr_parsing_table
         self.slr_grammar_rules  = slr_table.slr_grammar_rules
@@ -669,15 +617,18 @@ class parser:
         prod = self.slr_grammar_rules[rule]
         lhs = prod[LHS]
         rhs = prod[RHS:]
-        current_node_id = next(self.production_label)
-        self.productions_tree[current_node_id] = tuple([lhs, list()])
-        cn = self.productions_tree[current_node_id]
-        for x in range(len(rhs)):
-            self.productions_tree[current_node_id][CHILDREN].insert(0, self.productions_stack.pop()[PTR])
-            self.state_stack.pop()
-        self.productions_stack.append((lhs, current_node_id))
-        if (len(self.productions_stack) == 1) and (self.productions_stack[-1][PARENT] == self.start_production):
-            return
+        if rhs[0] == None:
+            self.productions_stack.append((lhs, None))
+        else:
+            current_node_id = next(self.production_label)
+            self.productions_tree[current_node_id] = tuple([lhs, list()])
+            cn = self.productions_tree[current_node_id]
+            for x in range(len(rhs)):
+                self.productions_tree[current_node_id][CHILDREN].insert(0, self.productions_stack.pop()[PTR])
+                self.state_stack.pop()
+            self.productions_stack.append((lhs, current_node_id))
+            if (len(self.productions_stack) == 1) and (self.productions_stack[-1][PARENT] == self.start_production):
+                return
         self.goto(lhs)
     
     def goto(self, non_terminal):
@@ -714,12 +665,12 @@ class parser:
         ss, ps = self.state_stack, self.productions_stack
         self.state_stack.append(0)
         index = 0
-        # print_dict(self.states)
+        lt = self.lexed_tokens
         print_dict(self.slr_parsing_table)
         # exit()
         while True:
             if (len(self.productions_stack) == 1) and (self.productions_stack[-1][PARENT] == self.start_production):
-                print("SUCCESS")
+                pass
                 break
             token, value = self.lexed_tokens[index]
             if token == None: token = value
@@ -730,6 +681,8 @@ class parser:
             print(self.productions_stack)
             if self.slr_parsing_table[top].get(token):
                 operation, param = self.slr_parsing_table[top][token]
+            elif self.slr_parsing_table[top].get(None):
+                operation, param = self.slr_parsing_table[top][None]
             else:
                 self.error(token)
             # operation found
@@ -739,23 +692,24 @@ class parser:
                     index += 1
             elif operation == REDUCE:
                 self.reduce(param)
-        print(self.state_stack)
+            else:
+                self.goto(self.productions_stack[-1][PARENT])
+        print('*'*100)
         print(self.productions_stack)
         print(self.productions_tree)
 
 
 code = scanner("./src_code.txt", "./tokens.yaml")
-# code.produce_automata()
-# code.save_automata("tokens.pickle")
-code.load_automata("./tokens.pickle")
+code.produce_automata()
+code.save_automata("tokens.pickle")
+# code.load_automata("./tokens.pickle")
 code.scan()
 code.linked_list_of_tokens.append((None, '$'))
 
 # print(code.linked_list_of_tokens)
-l = lr_0('<program>', 'productions.yaml', build=True, save=False)
-print(l)
-print(l.states)
-# for k,v in l.items.items():
-#     print(k,v)
+# print(code.linked_list_of_tokens)
+l = lr_0('<program>', 'productions.yaml', build=1, save=1)
 s = slr(l)
+# # [(None, 'a'), (None, 'a'), (None, 'b'), (None, 'b'), (None, '$')]
 p = parser(s, code.linked_list_of_tokens)
+# print(p.productions_tree)

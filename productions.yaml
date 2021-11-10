@@ -1,13 +1,18 @@
 <program>:
   - ['<program">', '$']
 <program">:
-  - ['class', '%id%', '{', '<field_decl*>'  , '}']
-  - ['class', '%id%', '{', '}']
+  - ['class', '%id%', '{', '<field_decl*>', '}']
 <field_decl*>:
-  - ['%type%', '%id%', '<subscript>', '<comma_vars>', ';']
-  - ['%type%', '%id%', ';']
+  - ['%type%', '<field_decl>', '<field_decl*_aux>']
+<field_decl*_aux>:
+  - ['<field_decl*>', '<field_decl*_aux>']
+  - [null]
+<field_decl>:
+  - ['%id%', '<subscript>',';']
+  - ['%id%', '<subscript>', '<comma_vars>', ';']
+<comma_vars>:
+  - [',', '%id%', '<subscript>', '<comma_vars>']
+  - [null]
 <subscript>:
   - ['[', '%int_literal%', ']']
-<comma_vars>:
-  - [',', '%id%', '<subscript>']
-  - [',', '%id%']
+  - [null]

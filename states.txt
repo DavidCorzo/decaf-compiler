@@ -1,0 +1,68 @@
+state=0
+<program> -> • <program"> $
+<program"> -> • class %id% { <field_decl*> }
+{'<program">': 1, 'class': 3}
+
+state=1
+<program> -> <program"> • $
+{'$': 2}
+
+state=2
+<program> -> <program"> $ •
+{}
+
+state=3
+<program"> -> class • %id% { <field_decl*> }
+{'%id%': 4}
+
+state=4
+<program"> -> class %id% • { <field_decl*> }
+{'{': 5}
+
+state=5
+<program"> -> class %id% { • <field_decl*> }
+<field_decl*> -> • %type% <id|id[int]> ;
+{'<field_decl*>': 6, '%type%': 8}
+
+state=6
+<program"> -> class %id% { <field_decl*> • }
+{'}': 7}
+
+state=7
+<program"> -> class %id% { <field_decl*> } •
+{}
+
+state=8
+<field_decl*> -> %type% • <id|id[int]> ;
+<id|id[int]> -> • %id% <[int]>
+{'%id%': 9, '<id|id[int]>': 14}
+
+state=9
+<id|id[int]> -> %id% • <[int]>
+<[int]> -> • [ %int_literal% ]
+<[int]> -> •
+{'<[int]>': 10, '[': 11}
+
+state=10
+<id|id[int]> -> %id% <[int]> •
+{}
+
+state=11
+<[int]> -> [ • %int_literal% ]
+{'%int_literal%': 12}
+
+state=12
+<[int]> -> [ %int_literal% • ]
+{']': 13}
+
+state=13
+<[int]> -> [ %int_literal% ] •
+{}
+
+state=14
+<field_decl*> -> %type% <id|id[int]> • ;
+{';': 15}
+
+state=15
+<field_decl*> -> %type% <id|id[int]> ; •
+{}
