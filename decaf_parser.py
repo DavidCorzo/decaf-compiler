@@ -14,6 +14,9 @@ def is_terminal(string):
 def is_terminal_with_value(string):
     return ((string[0] == '%') and (':' in string[1:-1]) and (string[-1] == '%'))
 
+def is_pseudo_terminal(string):
+    return ((string[0] == '%') and (string[-1] == '%'))
+
 def print_dict(d):
     for k,v in d.items(): print(k,v)
 
@@ -605,7 +608,39 @@ class parser:
         self.productions_stack  = list()
         self.lexed_tokens       = lexed_tokens
         self.production_label   = num_label_maker()
+        self.tree_repr          = str()
         self.parse()
+    
+    def __repr__(self) -> str:
+        self.str_tree([self.productions_tree_head])
+        return self.tree_repr
+    
+    def __str__(self) -> str:
+        return self.__repr__()
+    
+    def str_tree(self, list_node_i, tab=0, f=True):
+        for node_index in list_node_i:
+            prod, edge = self.productions_tree[node_index]
+            self.tree_repr += '\t'*tab+f'level={tab} '+prod
+            if edge == None:
+                self.tree_repr += '\n'
+            elif is_terminal(prod):
+                self.tree_repr += '='+self.productions_tree[edge][PARENT] + '\n'
+            else:
+                self.tree_repr += '\n'
+                self.str_tree(edge, tab+1, False)
+    
+    def print_tree(self, list_node_i, tab=0, f=True):
+        for node_index in list_node_i:
+            prod, edge = self.productions_tree[node_index]
+            print('\t'*tab+f'level={tab} '+prod, end='')
+            if edge == None:
+                print()
+            elif is_terminal(prod):
+                print('='+self.productions_tree[edge][PARENT])
+            else:
+                print()
+                self.str_tree(edge, tab+1, False)
 
     def error(self, symbol):
         print(f"ERROR: NO OPERATION FOR THE SYMBOL {symbol}")
@@ -681,6 +716,7 @@ class parser:
             elif self.slr_parsing_table[top].get(None):
                 operation, param = self.slr_parsing_table[top][None]
             else:
+                print(self.productions_stack)
                 self.error(token)
             # operation found
             if  operation == SHIFT:
@@ -691,12 +727,12 @@ class parser:
                 self.reduce(param)
             else:
                 self.goto(self.productions_stack[-1][PARENT])
-            print(self.productions_stack)
+            # print(self.productions_stack)
             pass
-        print(self.productions_tree)
+        # print(self.productions_tree)
 
 
-code = scanner("./src_code.txt", "./tokens.yaml")
+code = scanner("./src_code.decaf", "./tokens.yaml")
 code.produce_automata()
 code.save_automata("tokens.pickle")
 code.scan()
@@ -706,3 +742,4 @@ code.linked_list_of_tokens.append((None, '$'))
 l = lr_0('<program>', 'productions.yaml', build=1, save=1)
 s = slr(l)
 p = parser(s, code.linked_list_of_tokens)
+print(p.productions_tree)
