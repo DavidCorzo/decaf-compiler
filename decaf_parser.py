@@ -621,13 +621,12 @@ class parser:
     def str_tree(self, list_node_i, tab=0, f=True):
         for node_index in list_node_i:
             prod, edge = self.productions_tree[node_index]
-            self.tree_repr += '\t'*tab+f'level={tab} '+prod
             if edge == None:
-                self.tree_repr += '\n'
+                self.tree_repr += '\t'*tab+f'level={tab} '+prod+f' ({node_index})'+'\n'
             elif is_terminal(prod):
-                self.tree_repr += '='+self.productions_tree[edge][PARENT] + '\n'
+                self.tree_repr += '\t'*tab+f'level={tab} '+prod+'='+self.productions_tree[edge][PARENT]+f' ({node_index})'+'\n'
             else:
-                self.tree_repr += '\n'
+                self.tree_repr += '\t'*tab+f'level={tab} '+prod+f' ({node_index})'+'\n'
                 self.str_tree(edge, tab+1, False)
     
     def print_tree(self, list_node_i, tab=0, f=True):
@@ -660,7 +659,7 @@ class parser:
             cn = self.productions_tree[current_node_id]
             for x in range(len(rhs)):
                 ptr = self.productions_stack.pop()[PTR]
-                if ptr: self.productions_tree[current_node_id][CHILDREN].insert(0, ptr)
+                if ptr != None: self.productions_tree[current_node_id][CHILDREN].insert(0, ptr)
                 self.state_stack.pop()
             self.productions_stack.append((lhs, current_node_id))
             if (len(self.productions_stack) == 1) and (self.productions_stack[-1][PARENT] == self.start_production):
@@ -686,6 +685,9 @@ class parser:
         ss, ps, pt = self.state_stack, self.productions_stack, self.productions_tree
         self.state_stack.append(next_state)
         tree_element_index = next(self.production_label)
+        # if element[1] == 'class': 
+        #     print(element)
+        #     pdb.set_trace()
         t, v = element
         if (t == None):
             self.productions_tree[tree_element_index] = (v, None)
@@ -716,7 +718,8 @@ class parser:
             elif self.slr_parsing_table[top].get(None):
                 operation, param = self.slr_parsing_table[top][None]
             else:
-                print(self.productions_stack)
+                print(self.productions_stack, '\n')
+                print_dict(s)
                 self.error(token)
             # operation found
             if  operation == SHIFT:
@@ -732,14 +735,14 @@ class parser:
         # print(self.productions_tree)
 
 
-code = scanner("./src_code.decaf", "./tokens.yaml")
-code.produce_automata()
-code.save_automata("tokens.pickle")
-code.scan()
-code.linked_list_of_tokens.append((None, '$'))
+# code = scanner("./src_code.decaf", "./tokens.yaml")
+# code.produce_automata()
+# code.save_automata("tokens.pickle")
+# code.scan()
+# code.linked_list_of_tokens.append((None, '$'))
 
-# print(code.linked_list_of_tokens)
-l = lr_0('<program>', 'productions.yaml', build=1, save=1)
-s = slr(l)
-p = parser(s, code.linked_list_of_tokens)
-print(p.productions_tree)
+# # print(code.linked_list_of_tokens)
+# l = lr_0('<program>', 'productions.yaml', build=1, save=1)
+# s = slr(l)
+# p = parser(s, code.linked_list_of_tokens)
+# print(p.productions_tree)

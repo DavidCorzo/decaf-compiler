@@ -1,15 +1,11 @@
 class Program {
     boolean a[89], h, j[8];
-    def int hello(int h, boolean k) {
+    def int hello(int h, boolean k, int l, boolean t, int f, int g) {
         if (h) {
             
         }
-        else {
-
-        }
     }
 
-    # def void main() {
-    #     hello(h, k);
-    # }
+    def void main() {
+    }
 }

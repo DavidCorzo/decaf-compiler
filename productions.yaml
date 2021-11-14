@@ -72,6 +72,7 @@
   - ['break', ';']
   - ['continue', ';']
   - ['<block>']
+  - ['<expr>', ';']
 <else_block>:
   - ['else', '<block>']
   - [null]
@@ -111,7 +112,7 @@
   - ['%minus%', '<expr>']
   - ['!', '<expr>']
   - ['(', '<expr>', ')']
-  # - ['(', '']
+  - ['<expr>', '<expr>']
 ###############
 # <location>
 ###############
@@ -122,7 +123,7 @@
 # <callout_arg>
 ###############
 <callout_arg>:
-  - ['<expr>']
+  # - ['<expr>']
   - ['%string_literal%']
 ###############
 # <bin_op>
