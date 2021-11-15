@@ -621,10 +621,13 @@ class parser:
     def str_tree(self, list_node_i, tab=0, f=True):
         for node_index in list_node_i:
             prod, edge = self.productions_tree[node_index]
+            print
             if edge == None:
                 self.tree_repr += '\t'*tab+f'level={tab} '+prod+f' ({node_index})'+'\n'
+                print
             elif is_terminal(prod):
-                self.tree_repr += '\t'*tab+f'level={tab} '+prod+'='+self.productions_tree[edge][PARENT]+f' ({node_index})'+'\n'
+                t = self.productions_tree[edge][PARENT]
+                self.tree_repr += '\t'*tab+f'level={tab} '+prod+'='+t+f' ({node_index})'+'\n'
             else:
                 self.tree_repr += '\t'*tab+f'level={tab} '+prod+f' ({node_index})'+'\n'
                 self.str_tree(edge, tab+1, False)
@@ -632,14 +635,16 @@ class parser:
     def print_tree(self, list_node_i, tab=0, f=True):
         for node_index in list_node_i:
             prod, edge = self.productions_tree[node_index]
-            print('\t'*tab+f'level={tab} '+prod, end='')
-            if edge == None:
-                print()
-            elif is_terminal(prod):
-                print('='+self.productions_tree[edge][PARENT])
+            if is_nonterminal(prod) and (edge == None):
+                print('\t'*tab+f'level={tab} '+prod+'='+str(edge)+f' ({node_index})')
+            elif edge == None: # terminal such as ('{', None)
+                print('\t'*tab+f'level={tab} '+prod+f' ({node_index})')
+            elif is_terminal(prod): # terminal 
+                t = self.productions_tree[edge][PARENT]
+                print('\t'*tab+f'level={tab} '+prod+'='+t+f' ({node_index})')
             else:
-                print()
-                self.str_tree(edge, tab+1, False)
+                print('\t'*tab+f'level={tab} '+prod+f' ({node_index})')
+                self.print_tree(edge, tab+1, False)
 
     def error(self, symbol):
         print(f"ERROR: NO OPERATION FOR THE SYMBOL {symbol}")
@@ -651,10 +656,13 @@ class parser:
         prod = self.slr_grammar_rules[rule]
         lhs = prod[LHS]
         rhs = prod[RHS:]
+        current_node_id = next(self.production_label)
         if rhs[0] == None:
-            self.productions_stack.append((lhs, None))
+            self.productions_stack.append((lhs, current_node_id))
+            self.productions_tree[current_node_id] = tuple([lhs, None])
+            cn = self.productions_tree[current_node_id]
+            # pass
         else:
-            current_node_id = next(self.production_label)
             self.productions_tree[current_node_id] = tuple([lhs, list()])
             cn = self.productions_tree[current_node_id]
             for x in range(len(rhs)):
@@ -664,10 +672,11 @@ class parser:
             self.productions_stack.append((lhs, current_node_id))
             if (len(self.productions_stack) == 1) and (self.productions_stack[-1][PARENT] == self.start_production):
                 return
+        print
         self.goto(lhs)
     
     def goto(self, non_terminal):
-        ss, ps, pt = self.state_stack, self.productions_stack, self.productions_tree
+        # ss, ps, pt = self.state_stack, self.productions_stack, self.productions_tree
         if is_nonterminal(non_terminal):
             current_state   = self.state_stack[-1]
             operation, next_state  = self.slr_parsing_table[current_state][non_terminal]
@@ -685,9 +694,6 @@ class parser:
         ss, ps, pt = self.state_stack, self.productions_stack, self.productions_tree
         self.state_stack.append(next_state)
         tree_element_index = next(self.production_label)
-        # if element[1] == 'class': 
-        #     print(element)
-        #     pdb.set_trace()
         t, v = element
         if (t == None):
             self.productions_tree[tree_element_index] = (v, None)
@@ -741,8 +747,9 @@ class parser:
 # code.scan()
 # code.linked_list_of_tokens.append((None, '$'))
 
-# # print(code.linked_list_of_tokens)
+# print(code.linked_list_of_tokens)
 # l = lr_0('<program>', 'productions.yaml', build=1, save=1)
 # s = slr(l)
 # p = parser(s, code.linked_list_of_tokens)
 # print(p.productions_tree)
+# p.print_tree([p.productions_tree_head])
