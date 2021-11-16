@@ -1,7 +1,8 @@
 class Program {
     boolean a[67], h, j;
     def int hello(int h, boolean k, int l, boolean t, int f, int g) {
-        int y;
+        int y, h1;
+        y = 10;
         if (h) {
             
         }
@@ -10,6 +11,6 @@ class Program {
         }
     }
     def void func() {}
-    def void main() {
+    def void main(int a) {
     }
 }

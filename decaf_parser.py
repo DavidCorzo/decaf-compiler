@@ -737,7 +737,7 @@ class parser:
             else:
                 self.goto(self.productions_stack[-1][PARENT])
             # print(self.productions_stack)
-            pass
+            # pass
         # print(self.productions_tree)
 
 
@@ -751,5 +751,5 @@ class parser:
 # l = lr_0('<program>', 'productions.yaml', build=1, save=1)
 # s = slr(l)
 # p = parser(s, code.linked_list_of_tokens)
-# print(p.productions_tree)
-# p.print_tree([p.productions_tree_head])
+# # print(p.productions_tree)
+# # p.print_tree([p.productions_tree_head])
