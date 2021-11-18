@@ -1,12 +1,11 @@
 from os import error
-from decaf_parser import lr_0, slr, parser, is_nonterminal, is_pseudo_terminal, is_terminal, is_terminal_with_value, PARENT, CHILDREN, print_dict, PTR
 from scanner import scanner
-import pdb
+from decaf_parser import lr_0, slr, parser, is_nonterminal, is_pseudo_terminal, PARENT, CHILDREN, PTR
 # unicidad de variables
 # variables declaradas antes de acceder
 # que sean accesibles
 
-PRODUCTION_DETECTED, SCOPE_OFFSET, = 0, 1, 
+PRODUCTION_DETECTED, SCOPE_OFFSET, = 0, 1
 class semantic:
     var_type = None
 
@@ -26,12 +25,13 @@ class semantic:
         self.scope_index = 0
         self.traverse([self.productions_tree_head], False, False)
         self.scope_stack.pop()
-        # self.get_head_expr([self.productions_tree_head])
+        # print(self.exprs)
     
     def traverse(self, list_node_i, var_decl, append_next):
-        i = 0
-        while i < len(list_node_i):
-            node_index = list_node_i[i]
+        # i = 0
+        for node_index in list_node_i:
+        # while i < len(list_node_i):
+            # node_index = list_node_i[i]
             prod, edge = self.productions_tree[node_index]
             if (prod == '<field_decl*>') or (prod == '<var_decl*>'):
                 """ append variables in current scope """
@@ -94,8 +94,24 @@ class semantic:
             elif (prod == '}'):
                 self.scope_stack.pop()
                 self.scope_index -= 1
+            elif (prod == '<statement>'):
+                # ['%id%', '<subscript>', '<assign_op>', '<expr>', ';']
+                productions = [self.productions_tree[x][PARENT] for x in edge]
+                if productions == ['%id%', '<subscript>', '<assign_op>', '<expr>', ';']:
+                    t_expr = self.head_expr_return(edge[3], append_next)
+                    var_name = self.productions_tree[self.productions_tree[edge[0]][PTR]][PARENT]
+                    t_id   = self.return_t_of_var(var_name)
+                    if (t_id != t_expr):
+                        if (t_id == 'boolean') and (t_expr == 'int'):
+                            print(f"Semantic error: '{var_name}' is type boolean and is being assigned an expression evaluated as int.")
+                            exit(-1)
             elif (prod == '<expr>'):
-                self.head_expr_return(node_index)
+                # print(node_index, end=', ')
+                if not self.exprs.get(node_index):
+                    t = self.head_expr_return(node_index, append_next)
+                    # print(t)
+                # else:
+                #     print
 
             if ((prod == ';') or (prod == '{')):
                 var_decl = append_next = False
@@ -138,16 +154,18 @@ class semantic:
                 index -= 1
             self.var_not_declared(var_name)
     
-    # def get_head_expr(self, list_node_i):
-    #     for node_index in list_node_i:
-    #         prod, edge = self.productions_tree[node_index]
-    #         if prod == '<expr>':
-    #             self.head_expr_return(node_index)
-    #             continue
-    #         elif is_nonterminal(prod) and (edge != None):
-    #             self.get_head_expr(edge)
+    def return_t_of_var(self, var_name):
+        if self.scope_stack[self.scope_index].get(var_name):
+            return self.scope_stack[self.scope_index][var_name]
+        else:
+            index = self.scope_index
+            while index >= 0:
+                if self.scope_stack[index].get(var_name):
+                    return self.scope_stack[index][var_name]
+                index -= 1
+            self.var_not_declared(var_name)
     
-    def head_expr_return(self, node_index):
+    def head_expr_return(self, node_index, append_next):
         # expr_base_case = [
         #     ['%id%', '<subscript>'],
         #     ['<method_call>'],
@@ -158,72 +176,89 @@ class semantic:
         #     ['(', '<expr>', ')'],
         #     ['<expr>', '<expr>']
         # ]
-        if not self.exprs.get(node_index):
-            self.exprs[node_index] = None
+        if self.exprs.get(node_index):
+            return self.exprs[node_index]
         prod, edge = self.productions_tree[node_index]
         productions = [self.productions_tree[x][PARENT] for x in edge]
         edges       = [self.productions_tree[x][CHILDREN] for x in edge]
-        print(productions, edges)
+        # print(prod, edge)
+        # print(productions, edges)
         if   (productions == ['%id%', '<subscript>']):
-            return self.scope_stack[self.scope_index][edges[0][0]]
-        elif (productions == ['<method_call>']):
-            print
+            id_name = self.productions_tree[self.productions_tree[edge[0]][PTR]][PARENT]
+            t = self.return_t_of_var(id_name)
+            self.exprs[node_index] = t
+            return t
         elif (productions == ['<literal>']):
             n = self.productions_tree[self.productions_tree[edge[PARENT]][CHILDREN][PARENT]][PARENT]
             if (n == '%int_literal%'):
+                self.exprs[node_index] = 'int'
                 return 'int'
             elif (n == '%char_literal%'):
+                self.exprs[node_index] = 'int'
                 return 'int'
             elif (n == '%bool_literal%'):
+                self.exprs[node_index] = 'boolean'
                 return 'boolean'
         elif (productions == ['<expr>', '<bin_op>', '<expr>']):
-            
-            print
+            # <bin_op>:
+            #     - ['<arith_op>']
+            #     - ['%rel_op%']
+            #     - ['%eq_op%']
+            #     - ['%cond_op%']
+            first_e = self.head_expr_return(edge[0], append_next)
+            bin_op = productions[1]
+            bin_op_access = self.productions_tree[edges[1]][PARENT]
+            second_e = self.head_expr_return(edge[2], append_next)
+            if ((first_e == 'int') or (second_e == 'boolean')) and (
+                    (bin_op_access == '%rel_op%') or (bin_op_access == '%eq_op%') or (bin_op_access == '%cond_op%') \
+                ) and ((second_e == 'int') or (second_e == 'boolean')):
+                self.exprs[node_index] = 'boolean'
+                return 'boolean'
+            elif ((first_e == 'int') or (second_e == 'boolean')) and (
+                    bin_op == '<arith_op>'
+                    ) and ((second_e == 'int') or (second_e == 'boolean')):
+                self.exprs[node_index] = 'int'
+                return 'int'
+            else:
+                print("See line error 2.")
+                exit(-1)
         elif (productions == ['%minus%', '<expr>']):
-            print
+            first = productions[0]
+            second = self.head_expr_return(edge[1], append_next)
+            if second == 'int':
+                self.exprs[node_index] = 'int'
+                return 'int'
+            elif second == 'boolean':
+                self.exprs[node_index] = 'boolean'
+                return 'boolean'
+            else:
+                print("Error!!!!!")
+                exit(-1)
         elif (productions == ['!', '<expr>']):
-            print
+            first = productions[0]
+            second = self.head_expr_return(edge[1], append_next)
+            if second == 'int':
+                print("Error: '!' operand cannot operate with int.")
+                exit(-1)
+            elif second == 'boolean':
+                self.exprs[node_index] = 'boolean'
+                return 'boolean'
+            else:
+                print("Error... 242")
+                exit(-1)
         elif (productions == ['(', '<expr>', ')']):
-            print
-        elif (productions == ['<expr>', '<expr>']):
-            print
-        pass
-  
-
-    # def find_expr(self, list_node_i):
-    #     i = 0
-    #     while i < len(list_node_i):
-    #         node_index = list_node_i[i]
-    #         prod, edge = self.productions_tree[node_index]
-    #         if prod == '<expr>':
-    #             self.expr_stack.update({node_index : None})
-    #         if (edge != None) and (is_nonterminal(prod)):
-    #             self.find_expr(edge)
-    #         i += 1
-
-    # def expr_return_val(self):
-    #     # <expr>:
-    #     #     - ['%id%', '<subscript>']
-    #     #     - ['<method_call>']
-    #     #     - ['<literal>']
-    #     #     - ['<expr>', '<bin_op>', '<expr>']
-    #     #     - ['%minus%', '<expr>']
-    #     #     - ['!', '<expr>']
-    #     #     - ['(', '<expr>', ')']
-    #     #     - ['<expr>', '<expr>']
-    #     pass
-    
-    # def traverse(self, list_node_i, find):
-        # for node_index in list_node_i:
-        #     prod, edge = self.productions_tree[node_index]
-        #     if prod == None:
-        #         pass
-        #     elif is_pseudo_terminal(prod) or is_terminal(prod):
-        #         pass
-        #     else:
-        #         if prod == find:
-        #             self.expr_stack.insert(-1, node_index)
-        #         self.traverse(edge, find)
+            first = productions[0]
+            expr = self.head_expr_return(edge[1], append_next)
+            second = productions[2]
+            if (expr == 'int'):
+                self.exprs[node_index] = 'int'
+                return 'int'
+            elif (expr == 'boolean'):
+                self.exprs[node_index] = 'boolean'
+                return 'boolean'
+            else:
+                print("ERROR!!!!")
+                exit(-1)
 
 code = scanner("./src_code.decaf", "./tokens.yaml")
 code.produce_automata()
@@ -231,9 +266,7 @@ code.save_automata("tokens.pickle")
 code.scan()
 code.linked_list_of_tokens.append((None, '$'))
 
-# print(code.linked_list_of_tokens)
 l = lr_0('<program>', 'productions.yaml', build=1, save=1)
 s = slr(l)
 p = parser(s, code.linked_list_of_tokens)
 s = semantic(p)
-

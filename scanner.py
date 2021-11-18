@@ -646,7 +646,7 @@ class scanner:
                 if (char == '\n'):
                     self.line_num += 1
                     self.char_num = 0
-            elif char in "!(){}[];,":
+            elif char in "(){}[];,":
                 if buffer != '':
                     match_regex = self.recognize(buffer)
                     if match_regex: 
@@ -654,17 +654,24 @@ class scanner:
                     else: self.error.no_regex_match(self)
                 self.append_to_list_of_token(None, char)
                 buffer = ''
-            elif char in "<>=+-*/":
+            elif char in "!<>=+-*/%":
+                if buffer != '':
+                    match_regex = self.recognize(buffer)
+                    if match_regex:
+                        self.append_to_list_of_token(match_regex, buffer)
+                    else:
+                        self.error.no_regex_match(self)
+                    buffer = ''
                 symbol = char
                 next_char = self.peek_next()
                 if next_char != None:
                     if next_char in "=<>": 
                         symbol += next_char
+                        self.content_index += 1
                 match_regex = self.recognize(symbol)
                 if (match_regex): 
                     self.append_to_list_of_token(match_regex, symbol)
                 else: self.error.no_regex_match(self)
-                buffer = ''
             elif char in "\"\'":
                 terminal = char
                 buffer += char
@@ -730,10 +737,11 @@ class error_msg:
         print(f"No single quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
         exit(-1)
     
-# if __name__ == '__main__':
-#     code = scanner("./src_code.txt", "./tokens.yaml")
-#     code.produce_automata()
-#     code.save_automata("tokens.pickle")
-#     # code.load_automata("./tokens.pickle")
-#     code.scan()
-#     print(code.linked_list_of_tokens)
+if __name__ == '__main__':
+    code = scanner("./src_code.decaf", "./tokens.yaml")
+    code.produce_automata()
+    # code.save_automata("tokens.pickle")
+    # code.load_automata("./tokens.pickle")
+    code.scan()
+    for c in code.linked_list_of_tokens:
+        print(c)

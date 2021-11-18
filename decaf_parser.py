@@ -725,7 +725,7 @@ class parser:
                 operation, param = self.slr_parsing_table[top][None]
             else:
                 print(self.productions_stack, '\n')
-                print_dict(s)
+                print(s)
                 self.error(token)
             # operation found
             if  operation == SHIFT:
@@ -740,16 +740,3 @@ class parser:
             # pass
         # print(self.productions_tree)
 
-
-# code = scanner("./src_code.decaf", "./tokens.yaml")
-# code.produce_automata()
-# code.save_automata("tokens.pickle")
-# code.scan()
-# code.linked_list_of_tokens.append((None, '$'))
-
-# print(code.linked_list_of_tokens)
-# l = lr_0('<program>', 'productions.yaml', build=1, save=1)
-# s = slr(l)
-# p = parser(s, code.linked_list_of_tokens)
-# # print(p.productions_tree)
-# # p.print_tree([p.productions_tree_head])

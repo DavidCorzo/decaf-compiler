@@ -14,7 +14,7 @@
   - ['<field_decl*>', '<field_decl*_aux>']
   - [null]
 <field_decl>:
-  - ['%id%', '<subscript>', ';']
+  - ['%id%', '<subscript>',';']
   - ['%id%', '<subscript>', '<var_array_list>', ';']
 <var_array_list>:
   - [',', '%id%', '<subscript>', '<var_array_list>']
@@ -62,13 +62,11 @@
 ###############
 # <statement>
 ###############
-<assignment_statement>:
-  - ['%id%', '<subscript>', '<assign_op>', '<expr>', ';']
 <statement>:
-  - ['<assignment_statement>']
+  - ['%id%', '<subscript>', '<assign_op>', '<expr>', ';']
   - ['<method_call>', ';']
   - ['if', '<expr>', '<block>', '<else_block>']
-  - ['for', '<for_eval>', '<block>']
+  # - ['for', '(', '%id%', '%eq_op%', '<expr>', ')', '<block>']
   - ['return', ';']
   - ['return', '<expr>', ';']
   - ['break', ';']
@@ -78,30 +76,31 @@
 <else_block>:
   - ['else', '<block>']
   - [null]
-<for_eval>:
-  - ['(', '<expr>', ';', '<assignment_statement>', ')']
 ###############
 # <method_call>
 ###############
 <method_call>:
   - ['%id%', '(', ')']
   - ['%id%', '(', '<comma_expr>', ')']
-  - ['callout', '(', '%string_literal%',  ')']
-  - ['callout', '(', '%string_literal%', ',', '<callout_arg">', ')']
+  - ['callout', '(', '<str>',  ')']
+  - ['callout', '(', '<str>', '<comma_callout_arg>', ')']
+<str>:
+  - ['%string_literal%']
 <comma_expr>:
   - ['<expr>', '<comma_expr">']
 <comma_expr">:
   - [',', '<expr>', '<comma_expr">']
   - [null]
-<callout_arg">:
-  - ['<expr>']
-  - ['%string_literal%']
-  - ['<expr>', '<callout_args>']
-  - ['%string_literal%', '<callout_args>']
-<callout_args>:
-  - [',', '<expr>', '<callout_args>']
-  - [',', '%string_literal%', '<callout_args>']
+<comma_callout_arg>:
+  - ['<callout_arg>', <comma_callout_arg">]
+<comma_callout_arg">:
+  - [',', '<callout_arg>', '<comma_callout_arg">']
   - [null]
+###############
+# <method_name>
+###############
+# <method_name>:
+#   - ['%id%']
 ###############
 # <expr>
 ###############
@@ -112,13 +111,19 @@
   - ['%minus%', '<expr>']
   - ['!', '<expr>']
   - ['(', '<expr>', ')']
-  - ['(', '<expr>', '<bin_op>', '<expr>', ')']
+  # - ['<expr>', '<expr>']
+###############
+# <location>
+###############
+# <location>:
+#   - ['%id%']
+#   - ['%id%', '[', '<expr>', ']']
 ###############
 # <callout_arg>
 ###############
-# <callout_arg>:
-#   - ['<expr>']
-#   - ['%string_literal%']
+<callout_arg>:
+  # - ['<expr>']
+  - ['%string_literal%']
 ###############
 # <bin_op>
 ###############

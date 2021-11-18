@@ -1,0 +1,17 @@
+.data
+.text
+main:
+	addi $sp $sp -5 # allocate scop vars
+	addi $sp $sp -10 # allocate scop vars
+	addi $sp $sp 10 # out of scope deallocation
+	addi $sp $sp 5 # out of scope deallocation
+	li $v0, 10
+	syscall
+MBsum:
+	addi $sp $sp -8 # allocate scop vars
+	addi $sp $sp 8 # out of scope deallocation
+	jr $ra
+MBdummy:
+	addi $sp $sp -1 # allocate scop vars
+	addi $sp $sp 1 # out of scope deallocation
+	jr $ra

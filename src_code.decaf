@@ -1,16 +1,14 @@
 class Program {
-    boolean a[67], h, j;
-    def int hello(int h, boolean k, int l, boolean t, int f, int g) {
-        int y, h1;
-        y = 10;
-        if (h) {
-            
+    int y;
+    def boolean dummy() {
+        int i;
+        i = 0;
+        y = 0;
+        for ((i < 10) ; i += 1; ) {
+            if (i % 2) {
+                y += 10;
+            }
         }
-        if (a) {
-            
-        }
-    }
-    def void func() {}
-    def void main(int a) {
+        callout ("hello", (78+6), 0xF, 670);
     }
 }
