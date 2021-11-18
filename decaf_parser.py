@@ -2,7 +2,7 @@ from os import error
 from yaml import safe_load
 from copy import deepcopy
 import pickle
-from scanner import scanner
+from decaf_scanner import scanner
 
 def is_nonterminal(string):
     if string == None: return False
@@ -292,7 +292,7 @@ class lr_0:
         epsilon_state = set(state_key) & self.epsilon_items
         if len(epsilon_state) > 0:
             if len(epsilon_state) != 1:
-                print("REDUCE REDUCE BY TWO PRODUCTIONS ON EPSILON")
+                print("Parsing error: reduce-reduce by two productions on epsilon, ambiguous language.")
                 exit(-1)
             self.epsilon_states[renamed_state] = list(epsilon_state)[0]
             
@@ -377,36 +377,36 @@ class lr_0:
     
 
 SHIFT, REDUCE, GOTO, ACCEPT = 'S', 'R', 'G', 'A'
-class slr:
+class lr_0_t:
     def __init__(self, lr_0_assembled:lr_0):
-        self.lr_0                       = lr_0_assembled
-        self.epsilon_states             = lr_0_assembled.epsilon_states
-        self.epsilon_items              = lr_0_assembled.epsilon_items
-        self.terminals                  = lr_0_assembled.terminals
-        self.grammar_rules              = lr_0_assembled.grammar_rules
-        self.states                     = lr_0_assembled.states
-        self.reveresed_renamed_states   = lr_0_assembled.reveresed_renamed_states
-        self.items                      = lr_0_assembled.items
-        self.accept_state               = lr_0_assembled.accept_state
-        self.leaf_states                = lr_0_assembled.leaf_states
-        self.index_to_states            = {index:k for index,k in zip(range(len(self.states.keys())), self.states.keys())}
-        self.states_to_index            = {k:index for index,k in self.index_to_states.items()}
-        self.start_production           = lr_0_assembled.start_production
-        self.slr_parsing_table          = None
-        self.firsts_table               = dict()
-        self.follow_table               = dict()
-        self.first_of_current           = None
-        self.follow_pending_stack       = list()
-        self.current                    = None
-        self.slr_stack                  = list()
-        self.slr_grammar_rules          = dict()
-        self.reverse_slr_grammar_rules  = dict()
-        self.productions_tree_head      = None
+        self.lr_0                           = lr_0_assembled
+        self.epsilon_states                 = lr_0_assembled.epsilon_states
+        self.epsilon_items                  = lr_0_assembled.epsilon_items
+        self.terminals                      = lr_0_assembled.terminals
+        self.grammar_rules                  = lr_0_assembled.grammar_rules
+        self.states                         = lr_0_assembled.states
+        self.reveresed_renamed_states       = lr_0_assembled.reveresed_renamed_states
+        self.items                          = lr_0_assembled.items
+        self.accept_state                   = lr_0_assembled.accept_state
+        self.leaf_states                    = lr_0_assembled.leaf_states
+        self.index_to_states                = {index:k for index,k in zip(range(len(self.states.keys())), self.states.keys())}
+        self.states_to_index                = {k:index for index,k in self.index_to_states.items()}
+        self.start_production               = lr_0_assembled.start_production
+        self.lr_0_parsing_table             = None
+        self.firsts_table                   = dict()
+        self.follow_table                   = dict()
+        self.first_of_current               = None
+        self.follow_pending_stack           = list()
+        self.current                        = None
+        self.lr_0_stack                     = list()
+        self.lr_0_grammar_rules             = dict()
+        self.reverse_lr_0_grammar_rules     = dict()
+        self.ast_head                       = None
         self.index_grammar_rules()
         # self.firsts()
         # self.follows()
         # self.unit_test('grammars/example_follow.yaml', 'grammars/example_first.yaml')
-        self.construct_slr()
+        self.construct_lr_0_table()
     
     def unit_test(self, follow_filename, first_file):
         follow_file = open(follow_filename)
@@ -437,8 +437,8 @@ class slr:
         for lhs, rhs_list in self.grammar_rules.items():
             for rhs in rhs_list:
                 current_gr = tuple([lhs]+rhs)
-                self.slr_grammar_rules[index] = current_gr
-                self.reverse_slr_grammar_rules[current_gr] = index
+                self.lr_0_grammar_rules[index] = current_gr
+                self.reverse_lr_0_grammar_rules[current_gr] = index
                 index += 1
     
     def firsts(self):
@@ -484,7 +484,7 @@ class slr:
     
     def detect_left_recursion(self, lhs, first_rhs):
         if (lhs == first_rhs):
-            print(f"LEFT RECURSION DETECTED AT {lhs}")
+            print(f"Parsing error: left recursion detected at {lhs}")
             exit(-1)
     
     def calculate_feasable_first(self, lhs):
@@ -565,45 +565,45 @@ class slr:
         for pf in self.follow_pending_stack:
             self.follow_table[pf[0]] |= deepcopy(self.follow_table[pf[1]])
 
-    def construct_slr(self):
-        self.slr_parsing_table = {k:{} for k in self.index_to_states.keys()}
+    def construct_lr_0_table(self):
+        self.lr_0_parsing_table = {k:{} for k in self.index_to_states.keys()}
         for state, transitions in self.states.items():
             for transition_token, next_state in transitions.items():
                 if is_nonterminal(transition_token): # nonterminal, therefore goto
-                    self.slr_parsing_table[state][transition_token] = tuple([GOTO, next_state])
+                    self.lr_0_parsing_table[state][transition_token] = tuple([GOTO, next_state])
                 else: # terminal, therefore action
-                    self.slr_parsing_table[state][transition_token] = tuple([SHIFT, next_state])
+                    self.lr_0_parsing_table[state][transition_token] = tuple([SHIFT, next_state])
         for leaf_state in self.leaf_states:
             state = self.reveresed_renamed_states[leaf_state]
             for item in state:
                 reduce_production = list(self.items[item])
                 reduce_production.remove('•')
-                reduce_production_index = self.reverse_slr_grammar_rules[tuple(reduce_production)]
+                reduce_production_index = self.reverse_lr_0_grammar_rules[tuple(reduce_production)]
                 for p in self.terminals:
-                    if not self.slr_parsing_table[leaf_state].get(p):
-                        self.slr_parsing_table[leaf_state][p] = tuple([REDUCE, reduce_production_index])
+                    if not self.lr_0_parsing_table[leaf_state].get(p):
+                        self.lr_0_parsing_table[leaf_state][p] = tuple([REDUCE, reduce_production_index])
                     else:
-                        print("ERROR IN SLR PARSING TABLE, POSITION ALREADY OCCUPIED")
+                        print("Parsing error: in lr_0_t parsing table, position already occupied")
                         exit(-1)
         for state, item in self.epsilon_states.items():
             reduce_production = list(self.items[item])
             reduce_production.remove('•')
             reduce_production.append(None)
-            reduce_production_index = self.reverse_slr_grammar_rules[tuple(reduce_production)]
-            if not self.slr_parsing_table[state].get(None):
-                self.slr_parsing_table[state][None] = tuple([REDUCE, reduce_production_index])
+            reduce_production_index = self.reverse_lr_0_grammar_rules[tuple(reduce_production)]
+            if not self.lr_0_parsing_table[state].get(None):
+                self.lr_0_parsing_table[state][None] = tuple([REDUCE, reduce_production_index])
             else:
-                print("ERROR IN SLR EPSILON PARSING STATE, POSITION ALREADY OCCUPIED")
+                print("Parsing error: in lr_0_t epsilon parsing state, position already occupied")
                 exit(-1)
         
 PARENT, CHILDREN, PTR = 0, 1, 1
 class parser:
-    def __init__(self, slr_table:slr, lexed_tokens):
-        self.start_production   = slr_table.start_production
+    def __init__(self, assembled_lr_0_table:lr_0_t, lexed_tokens):
+        self.start_production   = assembled_lr_0_table.start_production
         self.e_reduce           = None
-        self.slr_parsing_table  = slr_table.slr_parsing_table
-        self.slr_grammar_rules  = slr_table.slr_grammar_rules
-        self.productions_tree   = dict()
+        self.lr_0_parsing_table = assembled_lr_0_table.lr_0_parsing_table
+        self.lr_0_grammar_rules = assembled_lr_0_table.lr_0_grammar_rules
+        self.ast                = dict()
         self.state_stack        = list()
         self.productions_stack  = list()
         self.lexed_tokens       = lexed_tokens
@@ -611,8 +611,13 @@ class parser:
         self.tree_repr          = str()
         self.parse()
     
+    def debug(self):
+        print(f"{'-'*10}PASSED PARSING STAGE{'-'*10}")
+        print("TREE:")
+        print(self)
+    
     def __repr__(self) -> str:
-        self.str_tree([self.productions_tree_head])
+        self.str_tree([self.ast_head])
         return self.tree_repr
     
     def __str__(self) -> str:
@@ -620,13 +625,13 @@ class parser:
     
     def str_tree(self, list_node_i, tab=0, f=True):
         for node_index in list_node_i:
-            prod, edge = self.productions_tree[node_index]
+            prod, edge = self.ast[node_index]
             print
             if edge == None:
                 self.tree_repr += '\t'*tab+f'level={tab} '+prod+f' ({node_index})'+'\n'
                 print
             elif is_terminal(prod):
-                t = self.productions_tree[edge][PARENT]
+                t = self.ast[edge][PARENT]
                 self.tree_repr += '\t'*tab+f'level={tab} '+prod+'='+t+f' ({node_index})'+'\n'
             else:
                 self.tree_repr += '\t'*tab+f'level={tab} '+prod+f' ({node_index})'+'\n'
@@ -634,75 +639,68 @@ class parser:
     
     def print_tree(self, list_node_i, tab=0, f=True):
         for node_index in list_node_i:
-            prod, edge = self.productions_tree[node_index]
+            prod, edge = self.ast[node_index]
             if is_nonterminal(prod) and (edge == None):
                 print('\t'*tab+f'level={tab} '+prod+'='+str(edge)+f' ({node_index})')
             elif edge == None: # terminal such as ('{', None)
                 print('\t'*tab+f'level={tab} '+prod+f' ({node_index})')
             elif is_terminal(prod): # terminal 
-                t = self.productions_tree[edge][PARENT]
+                t = self.ast[edge][PARENT]
                 print('\t'*tab+f'level={tab} '+prod+'='+t+f' ({node_index})')
             else:
                 print('\t'*tab+f'level={tab} '+prod+f' ({node_index})')
                 self.print_tree(edge, tab+1, False)
 
     def error(self, symbol):
-        print(f"ERROR: NO OPERATION FOR THE SYMBOL {symbol}")
-        error(-1)
+        print(f"Parsing error: no operation for the symbol {symbol}")
         exit(-1)
     
     def reduce(self, rule):
-        st, ps, pt = self.state_stack, self.productions_stack, self.productions_tree
-        prod = self.slr_grammar_rules[rule]
+        prod = self.lr_0_grammar_rules[rule]
         lhs = prod[LHS]
         rhs = prod[RHS:]
         current_node_id = next(self.production_label)
         if rhs[0] == None:
             self.productions_stack.append((lhs, current_node_id))
-            self.productions_tree[current_node_id] = tuple([lhs, None])
-            cn = self.productions_tree[current_node_id]
-            # pass
+            self.ast[current_node_id] = tuple([lhs, None])
         else:
-            self.productions_tree[current_node_id] = tuple([lhs, list()])
-            cn = self.productions_tree[current_node_id]
+            self.ast[current_node_id] = tuple([lhs, list()])
             for x in range(len(rhs)):
                 ptr = self.productions_stack.pop()[PTR]
-                if ptr != None: self.productions_tree[current_node_id][CHILDREN].insert(0, ptr)
+                if ptr != None: self.ast[current_node_id][CHILDREN].insert(0, ptr)
                 self.state_stack.pop()
             self.productions_stack.append((lhs, current_node_id))
             if (len(self.productions_stack) == 1) and (self.productions_stack[-1][PARENT] == self.start_production):
                 return
-        print
         self.goto(lhs)
     
     def goto(self, non_terminal):
-        # ss, ps, pt = self.state_stack, self.productions_stack, self.productions_tree
         if is_nonterminal(non_terminal):
-            current_state   = self.state_stack[-1]
-            operation, next_state  = self.slr_parsing_table[current_state][non_terminal]
+            current_state          = self.state_stack[-1]
+            operation, next_state  = self.lr_0_parsing_table[current_state][non_terminal]
             if (operation == GOTO): 
                 self.state_stack.append(next_state)
                 pass
             else: 
-                print("GOTO not applicable")
+                print("Parsing error in goto function: called goto function while not applicable.")
                 exit(-1)
         else:
-            print("ERROR: TERMINAL CALLED ON GOTO")
+            print("Parsing error: terminal called on goto.")
             exit(-1)
 
     def shift(self, next_state, element):
-        ss, ps, pt = self.state_stack, self.productions_stack, self.productions_tree
+        ss, ps, pt = self.state_stack, self.productions_stack, self.ast
         self.state_stack.append(next_state)
         tree_element_index = next(self.production_label)
         t, v = element
         if (t == None):
-            self.productions_tree[tree_element_index] = (v, None)
+            self.ast[tree_element_index] = (v, None)
             self.productions_stack.append((v, tree_element_index))
         else:
-            self.productions_tree[tree_element_index] = (v, None)
+            self.ast[tree_element_index] = (v, None)
             element = (t, tree_element_index)
             percentage_element = next(self.production_label)
-            self.productions_tree[percentage_element] = (t, tree_element_index)
+            self.ast[percentage_element] = (t, tree_element_index)
             self.productions_stack.append((t, percentage_element))
     
     def parse(self):
@@ -711,18 +709,18 @@ class parser:
         lt = self.lexed_tokens
         while True:
             if (len(self.productions_stack) == 1) and (self.productions_stack[-1][PARENT] == self.start_production):
-                self.productions_tree_head = self.productions_stack[-1][CHILDREN]
+                self.ast_head = self.productions_stack[-1][CHILDREN]
                 break
             token, value = self.lexed_tokens[index]
             if token == None: token = value
             operation = param = None
             # if it exists
             top = self.state_stack[-1]
-            s = self.slr_parsing_table[top]
-            if self.slr_parsing_table[top].get(token):
-                operation, param = self.slr_parsing_table[top][token]
-            elif self.slr_parsing_table[top].get(None):
-                operation, param = self.slr_parsing_table[top][None]
+            s = self.lr_0_parsing_table[top]
+            if self.lr_0_parsing_table[top].get(token):
+                operation, param = self.lr_0_parsing_table[top][token]
+            elif self.lr_0_parsing_table[top].get(None):
+                operation, param = self.lr_0_parsing_table[top][None]
             else:
                 print(self.productions_stack, '\n')
                 print(s)
@@ -736,7 +734,5 @@ class parser:
                 self.reduce(param)
             else:
                 self.goto(self.productions_stack[-1][PARENT])
-            # print(self.productions_stack)
-            # pass
-        # print(self.productions_tree)
+
 

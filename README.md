@@ -48,5 +48,5 @@ Esta clase únicamente despliega errores al usuario si llegase a haber alguno. D
 ## CLI
 El command line interfase se usa de la siguiente manera:
 ```
-python <scanner_simplified.py> --target <stage> --debug <stage --o <new_name>
+python <archivo.py> --target <stage> --debug <stage --o <new_name>
 ```

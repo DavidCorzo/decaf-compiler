@@ -1,18 +1,8 @@
 from os import error
-from string import ascii_lowercase, ascii_uppercase, digits
+from string import ascii_uppercase
 from typing import Iterable, OrderedDict
 from yaml import safe_load
 import pickle
-
-# class dictlist(dict):
-#     def __setitem__(self, key, value):
-#         if (key == None):
-#             if (self.get(None) == None):
-#                 self.update({key: set([value])})
-#             else: 
-#                 self[key].add(value)
-#         else:
-#             self.update({key:value})
 
 def add_edge(states, state, key, value):
     if (key == None):
@@ -107,49 +97,6 @@ class NFA:
         precedence = { # don't use 0, confuses the if's.
             '|': 1, '·': 2, '*': 3, '+': 4, '?': 5
         }
-        ########################## EXPANDING RANGES #########################################
-        # new_infix = ""
-        # i = 0
-        # while (i < len(infix)):
-        #     if (infix[i] == "["):
-        #         ii = 0
-        #         i += 1
-        #         char_inside = ""
-        #         while (infix[i] != ']'):
-        #             char_inside += infix[i]
-        #             if ((infix[i] == '-') and (ii != 0)):
-        #                 char_inside = char_inside[:-2]
-        #                 low_lim = infix[i-1]
-        #                 high_lim = infix[i+1]
-        #                 if ((low_lim in digits) and (high_lim in digits)):
-        #                     for r in range(int(low_lim), int(high_lim) + 1):
-        #                         char_inside += str(r)
-        #                 elif ((low_lim in ascii_lowercase) and (high_lim in ascii_lowercase)):
-        #                     for r in range(ord(low_lim), ord(high_lim) + 1):
-        #                         char_inside += '|' + chr(r)
-        #                 elif ((low_lim in ascii_uppercase) and (high_lim in ascii_uppercase)):
-        #                     for r in range(ord(low_lim), ord(high_lim) + 1):
-        #                         char_inside += '|' + chr(r)
-        #                 else:
-        #                     print("Error in range of regular expression.")
-        #                     exit(-1)
-        #                 i += 1
-        #             elif (infix[i] == '\\'):
-        #                 print(char_inside)
-        #                 char_inside += '\\' + infix[i+1]
-        #                 i += 1
-        #             ii += 1
-        #             i  += 1
-        #         print(char_inside)
-        #         new_infix += f"({'|'.join([x for x in char_inside])})"
-        #     else:
-        #         new_infix += infix[i]
-        #     i += 1
-        ########################## EXPANDING RANGES #########################################
-        ########################## POSTFIX STRING GENERATION #########################################
-        # infix = new_infix
-        # print(infix)
-        # exit(-1)
         i = 0
         while (i < len(infix)):
             char = infix[i]
@@ -540,7 +487,7 @@ class DFA:
     
 
 class scanner:
-    def __init__(self, filename, token_file=None):
+    def __init__(self, filename, token_file, build, save):
         self.filename = filename
         self.current_line = 0
         self.current_line_index = 0
@@ -550,15 +497,28 @@ class scanner:
         self.line_num = 1
         self.char_num = 1
         self.deterministic_finite_automata = {}
-        if token_file != None:
-            with open(token_file, mode="r") as file:
-                self.tokens = OrderedDict(safe_load(file))
-                file.close()
-        else:
-            self.load_automata()
         self.linked_list_of_tokens = []
         self.candidates = []
         self.error = error_msg()
+        if build != None:
+            with open(token_file, mode="r") as file:
+                self.tokens = OrderedDict(safe_load(file))
+                file.close()
+            self.produce_automata()
+            if save:
+                self.save_automata()
+        else:
+            try:
+                self.load_automata(token_file)
+            except:
+                error("Scanning error: loading automata file corrupt or non existant. Provide a token file to produce the automata.")
+                exit(-1)
+        self.scan()
+    
+    def debug(self):
+        print("PASSED SCANNING STAGE")
+        for k,v in self.linked_list_of_tokens:
+            print(k,v)
     
     def produce_automata(self):
         """
@@ -718,30 +678,25 @@ class error_msg:
     no_regex_match: toma con argumento la instancia del scanner y extrae las coordenadas. Después para ejecución.
     """
     def illegal_character(self, scanner_instance:scanner):
+        print('Scanning error: illegal_character')
         print(f"ILLEGAL CHARACTER FOUND '{scanner_instance.content[scanner_instance.content_index]}'")
         print(f"illegal character found at line {scanner_instance.line_num} column {scanner_instance.char_num}")
         exit(-1)
     
     def no_regex_match(self, scanner_instance):
+        print('Scanning error: no_regex_match')
         print(f"NO KEYWORD MATCH FOR '{scanner_instance.content[scanner_instance.content_index]}'")
         print(f"No match was found for the above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
         exit(-1)
 
     def unmatching_doublequotes(self, scanner_instance):
+        print('Scanning error: unmatching_doublequotes')
         print(f"FILE TERMINATED WITHOUT CLOSING STRING '{scanner_instance.content[scanner_instance.content_index]}'")
         print(f"No double quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
         exit(-1)
     
     def unmatching_singlequotes(self, scanner_instance):
+        print('Scanning error: unmatching_singlequotes')
         print(f"FILE TERMINATED WITHOUT CLOSING CHAR LITERAL '{scanner_instance.content[scanner_instance.content_index]}'")
         print(f"No single quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
         exit(-1)
-    
-if __name__ == '__main__':
-    code = scanner("./src_code.decaf", "./tokens.yaml")
-    code.produce_automata()
-    # code.save_automata("tokens.pickle")
-    # code.load_automata("./tokens.pickle")
-    code.scan()
-    for c in code.linked_list_of_tokens:
-        print(c)
