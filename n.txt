@@ -1,0 +1,8 @@
+.main
+    addi $sp $sp -4
+    addi $sp $sp -4
+    sw $sp(0), $ra
+    jal sum
+sum:
+    addi $sp $sp -4 # $ra
+    sw $sp(0)

@@ -598,7 +598,7 @@ class lr_0_t:
         
 PARENT, CHILDREN, PTR = 0, 1, 1
 class parser:
-    def __init__(self, assembled_lr_0_table:lr_0_t, lexed_tokens):
+    def __init__(self, assembled_lr_0_table:lr_0_t, scanner_instance:scanner):
         self.start_production   = assembled_lr_0_table.start_production
         self.e_reduce           = None
         self.lr_0_parsing_table = assembled_lr_0_table.lr_0_parsing_table
@@ -606,7 +606,7 @@ class parser:
         self.ast                = dict()
         self.state_stack        = list()
         self.productions_stack  = list()
-        self.lexed_tokens       = lexed_tokens
+        self.lexed_tokens       = scanner_instance.linked_list_of_tokens
         self.production_label   = num_label_maker()
         self.tree_repr          = str()
         self.parse()

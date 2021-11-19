@@ -6,7 +6,6 @@ INT, BOOLEAN = 'int', 'boolean'
 class semantic:
     var_type = None
     def __init__(self, p:parser):
-        # self.lexed_tokens = p.lexed_tokens
         self.ast                        = p.ast
         self.ast_head                   = p.ast_head
         self.scope_stack                = list()
@@ -212,8 +211,8 @@ class semantic:
                 self.exprs[node_index] = 'int'
                 return 'int'
             elif second == 'boolean':
-                self.exprs[node_index] = 'boolean'
-                return 'boolean'
+                print(f"Semantic error: {second} -<expr> cannot operate with boolean only with int.")
+                exit(-1)
             else:
                 print(f"Semantic error: {second} is not an int or boolean")
                 exit(-1)

@@ -1,9 +1,11 @@
 class Program {
     int y;
-    def boolean dummy() {
+    int t[10];
+    def boolean dummy(int t, int k) {
         int i;
         i = 0;
-        y = 0;
+        y = 0; 
+        t[0] = 'a';
         for ((i < 10) ; i += 1; ) {
             if (i % 2) {
                 y += 10;

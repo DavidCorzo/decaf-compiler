@@ -1,7 +1,7 @@
 from yaml import parse
-from scanner import scanner
-from decaf_parser import lr_0, slr, parser, is_nonterminal, is_pseudo_terminal, PARENT, PTR, CHILDREN
-from semantic import semantic
+from decaf_scanner import scanner
+from decaf_parser import lr_0, lr_0_t, parser, is_nonterminal, is_pseudo_terminal, PARENT, PTR, CHILDREN
+from decaf_semantic import semantic
 
 mem_space = {'int':4, 'boolean': 1, 'class': 0, 'void': 0}
 VAR_TYPE, SP_POS = 0, 1
@@ -11,9 +11,9 @@ BEGIN_PROGRAM_MAIN = ['.data\n', '.text\n']
 END_PROGRAM_MAIN = ['\tli $v0, 10\n', '\tsyscall\n']
 class codegen:
     def __init__(self, assembled_semantic:semantic, executable_filename='a.executable'):
-        self.ast                        = assembled_semantic.productions_tree
-        self.ast_head                   = assembled_semantic.productions_tree_head
-        self.executable_f               = str()
+        self.ast                        = assembled_semantic.ast
+        self.ast_head                   = assembled_semantic.ast_head
+        self.exprs_return               = assembled_semantic.exprs
         self.scope_stack                = list()
         self.next_scope_pending_vars    = dict()
         self.assembler_sections         = list()
@@ -63,8 +63,8 @@ class codegen:
             elif (prod == '<statement>'):
                 self.statement(edges)
                 continue
-            # elif (prod == '<program">'):
-            #     self.program_quote(edges)
+            elif (prod == '<expr>'):
+                self.expr(edges)
             elif (prod == '<method_decl*>'):
                 self.method_decl_kleene(edges)
             elif (prod == '{'):
@@ -179,10 +179,32 @@ class codegen:
     
     def statement(self, edges):
         productions = [self.ast[x][PARENT] for x in edges]
-        if productions == ['%id%', '<subscript>', '<assign_op>', '<expr>', ';']:
-            var_name = self.ast[self.ast[edges[0]][PTR]][PARENT]
-            subscript_offset = self.ast[edges[1]]
+        if productions == ['<assignment_statement>']:
+            # ['%id%', '<subscript>', '<assign_op>', '<expr>', ';']
+            # var_name = self.ast[self.ast[self.ast[edges[0]][PTR][0]][PTR]][PARENT]
+            subscript_offset = None
+            if self.ast[self.ast[edges[0]][PTR][1]][PTR]:
+                EXPR = 1
+                subscript_offset = self.expr(self.ast[self.ast[self.ast[edges[0]][PTR][1]][PTR][EXPR]][PTR])
             print(subscript_offset)
+        elif productions == ['<method_call>', ';']:
+            pass
+        elif productions == ['if', '<expr>', '<block>', '<else_block>']:
+            pass
+        elif productions == ['for', '<for_eval>', '<block>']:
+            pass
+        elif productions == ['return', ';']:
+            pass
+        elif productions == ['return', '<expr>', ';']:
+            pass
+        elif productions == ['break', ';']:
+            pass
+        elif productions == ['continue', ';']:
+            pass
+        elif productions == ['<block>']:
+            pass
+        elif productions == ['<expr>', ';']:
+            pass
     
     def subscript(self, edge):
         right_sb = edge[0]
@@ -190,7 +212,34 @@ class codegen:
         left__sb = edge[2]
     
     def expr(self, edges):
-        pass
+        productions = [self.ast[x][PARENT] for x in edges]
+        if (productions == ['%id%', '<subscript>']):
+            pass
+        elif (productions == ['<literal>']):
+            next_prod = self.ast[self.ast[edges[0]][PTR][0]][PARENT]
+            value = self.ast[self.ast[self.ast[edges[0]][PTR][0]][PTR]][PARENT]
+            if (next_prod == '%int_literal%'):
+                return value
+            elif (next_prod == '%char_literal%'):
+                print("CHAR:", next_prod)
+                return value
+            elif (next_prod == '%bool_literal%'):
+                if value == 'true':
+                    return 1
+                elif value == 'false':
+                    return 0
+                else:
+                    print(f'Codegen error: {next_prod} has value={value} that is undefined.')
+        elif (productions == ['<expr>', '<bin_op>', '<expr>']):
+            pass
+        elif (productions == ['%minus%', '<expr>']):
+            pass
+        elif (productions == ['!', '<expr>']):
+            pass
+        elif (productions == ['(', '<expr>', ')']):
+            pass
+        elif (productions == ['(', '<expr>', '<bin_op>', '<expr>', ')']):
+            pass
 
     def method_call(self, edges):
         # %id% ( )
@@ -204,18 +253,3 @@ class codegen:
                 self.assembler_sections[self.current_section].append(f'\tjal {var_name} # method call\n')
             elif prod == 'callout':
                 pass
-
-code = scanner("./src_code.decaf", "./tokens.yaml")
-code.produce_automata()
-code.save_automata("tokens.pickle")
-code.scan()
-code.linked_list_of_tokens.append((None, '$'))
-
-l = lr_0('<program>', 'productions.yaml', build=1, save=1)
-s = slr(l)
-for c in code.linked_list_of_tokens:
-    print(c)
-p = parser(s, code.linked_list_of_tokens)
-print(p)
-# s = semantic(p)
-# c = codegen(s)

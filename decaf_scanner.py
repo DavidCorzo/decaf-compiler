@@ -487,11 +487,15 @@ class DFA:
     
 
 class scanner:
-    def __init__(self, filename, token_file, build, save):
-        self.filename = filename
+    def __init__(self, src_code_filename, token_filename_wo_ext, build, save):
+        """
+        build=True builds the regular expressions, build=False tries to load the regular expressions.
+        save=True saves the regular expression bank into a file. save=False doesnt save them.
+        """
+        self.filename = src_code_filename
         self.current_line = 0
         self.current_line_index = 0
-        self.file = open(filename, mode="r", encoding="utf-8")
+        self.file = open(src_code_filename, mode="r", encoding="utf-8")
         self.content = self.file.read()
         self.content_index = 0
         self.line_num = 1
@@ -500,20 +504,22 @@ class scanner:
         self.linked_list_of_tokens = []
         self.candidates = []
         self.error = error_msg()
-        if build != None:
-            with open(token_file, mode="r") as file:
+        if build:
+            with open((token_filename_wo_ext + '.yaml'), mode="r") as file:
                 self.tokens = OrderedDict(safe_load(file))
                 file.close()
             self.produce_automata()
             if save:
-                self.save_automata()
+                save_filename = token_filename_wo_ext + '.pickle'
+                self.save_automata(save_filename)
         else:
             try:
-                self.load_automata(token_file)
+                self.load_automata(token_filename_wo_ext + '.pickle')
             except:
                 error("Scanning error: loading automata file corrupt or non existant. Provide a token file to produce the automata.")
                 exit(-1)
         self.scan()
+        self.linked_list_of_tokens.append((None, '$'))
     
     def debug(self):
         print("PASSED SCANNING STAGE")

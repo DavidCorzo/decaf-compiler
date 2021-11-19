@@ -16,7 +16,8 @@
                 // "--target", "parser"
                 // "--target", "semantic"
                 // "--target", "codegen"
-                "--o", "decaf_program.decaf",
+                "src_code.decaf",
+                "--o", "decaf_program.executable",
                 // "--debug"
             ],
             "presentation": {
