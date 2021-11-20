@@ -8,7 +8,16 @@ VAR_TYPE, SP_POS = 0, 1
 METHOD_PREFIX, METHOD_POSTFIX = 'MB', 'ME'
 FINISH_TAG, MAIN = 'finish:', 0
 BEGIN_PROGRAM_MAIN = ['.data\n', '.text\n']
-END_PROGRAM_MAIN = ['\tli $v0, 10\n', '\tsyscall\n']
+ENDING_TAG = 'end_program'
+END_PROGRAM_MAIN = [f'{ENDING_TAG}:\n', '\t# end program\n', '\tli $v0, 10\n', '\tsyscall\n']
+
+OCCUPIED, VACANT = 'OCCUPIED', 'VACANT'
+temp_reg = {
+    VACANT: {'$t0', '$t1', '$t2', '$t3', '$t4', '$t5', '$t6', '$t7', '$t8', '$t9'},
+    OCCUPIED: set()
+}
+
+
 class codegen:
     def __init__(self, assembled_semantic:semantic, executable_filename='a.executable'):
         self.ast                        = assembled_semantic.ast
@@ -23,7 +32,10 @@ class codegen:
         self.stack_ptr                  = 0
         self.main_detected              = False
         self.method_detected            = False
+        self.method_vars                = {}
+        self.allocate_methods([self.ast_head])
         self.initiate()
+        # print(self.assembler_sections)
         self.write_exe(executable_filename)
     
     def write_exe(self, executable_filename):
@@ -35,6 +47,18 @@ class codegen:
                 for instruction in section:
                     file.write(instruction)
     
+    def allocate_methods(self, list_node_i):
+        for node_index in list_node_i:
+            prod, edges = self.ast[node_index]
+            if (prod == '<method_decl*>'):
+                var_type = self.ast[self.ast[edges[1]][PTR][0]]
+                if var_type[0] == '%type%': var_type = self.ast[self.ast[self.ast[edges[1]][PTR][0]][PTR]][PARENT]
+                else: var_type = var_type[0]
+                var_name = self.ast[self.ast[edges[2]][PTR]][PARENT]
+                self.method_vars[var_name] = [var_type]
+            if is_nonterminal(prod) and (edges != None):
+                self.allocate_methods(edges)
+            
     def initiate(self):
         self.scope_stack.append({})
         self.scope_index = 0
@@ -48,7 +72,7 @@ class codegen:
             prod, edges = self.ast[node_index]
             if (prod == '<field_decl*>'):
                 self.field_decl_kleene(edges)
-                self.allocate_vars_of_scope()
+                self.allocate_field_decl_and_methods()
                 continue
             elif (prod == '<var_decl*>'):
                 self.var_decl_kleene(edges)
@@ -60,13 +84,13 @@ class codegen:
             elif (prod == '<method_call>'):
                 self.method_call(edges)
                 continue
+            elif (prod == '<method_decl*>'):
+                self.method_decl_kleene(edges)
             elif (prod == '<statement>'):
                 self.statement(edges)
                 continue
             elif (prod == '<expr>'):
                 self.expr(edges)
-            elif (prod == '<method_decl*>'):
-                self.method_decl_kleene(edges)
             elif (prod == '{'):
                 self.opening_curly()
             elif (prod == '}'):
@@ -84,7 +108,7 @@ class codegen:
                     var_name = self.ast[edge][PARENT]
                     # reserve memory
                     self.stack_ptr -= mem_space[self.var_type]
-                    self.next_scope_pending_vars[var_name] = (self.var_type, self.stack_ptr)
+                    self.next_scope_pending_vars[var_name] = [self.var_type]
                 elif prod == '%type%':
                     self.var_type = self.ast[edge][PARENT]
                 elif is_nonterminal(prod) and (edge != None):
@@ -98,7 +122,7 @@ class codegen:
                     var_name = self.ast[edge][PARENT]
                     # reserve memory
                     self.stack_ptr -= mem_space[self.var_type]
-                    self.scope_stack[self.scope_index][var_name] = (self.var_type, self.stack_ptr)
+                    self.scope_stack[self.scope_index][var_name] = [self.var_type]
                 elif prod == '%type%':
                     self.var_type = self.ast[edge][PARENT]
                 elif is_nonterminal(prod) and (edge != None):
@@ -112,25 +136,29 @@ class codegen:
                     var_name = self.ast[edge][PARENT]
                     # reserve memory
                     self.stack_ptr -= mem_space[self.var_type]
-                    self.scope_stack[self.scope_index][var_name] = (self.var_type, self.stack_ptr)
+                    self.scope_stack[self.scope_index][var_name] = [self.var_type]
                 elif prod == '%type%':
                     self.var_type = self.ast[edge][PARENT]
                 elif is_nonterminal(prod) and (edge != None):
                     self.var_decl_kleene(edge)
     
     def allocate_vars_of_scope(self):
-        space = 0
-        for variable, attr in self.scope_stack[self.scope_index].items():
-            space += mem_space[attr[VAR_TYPE]]
-        self.assembler_sections[self.current_section].append(f'\taddi $sp $sp -{space} # allocate scop vars\n')
-    
-    # def program_quote(self, edges):
-    #     if edges:
-    #         var_name = self.ast[self.ast[edges[PTR]][PTR]][PARENT]
-    #         # don't really need Program, consider removing it
-    #         self.scope_stack[self.scope_index][var_name] = ('class', self.stack_ptr)
-    #         # codegen
-    #         self.executable_f += f'{var_name}:\n'
+        space_to_be_allocated = sum([mem_space[x[VAR_TYPE]] for x in self.scope_stack[self.scope_index].values()])
+        var_pos = 0
+        for variable in self.scope_stack[self.scope_index]:
+            self.scope_stack[self.scope_index][variable].append(var_pos)
+            var_pos += mem_space[self.scope_stack[self.scope_index][variable][VAR_TYPE]]
+        self.assembler_sections[self.current_section].append(f'\taddi $sp $sp -{space_to_be_allocated} # scope variable allocation\n')
+
+    def allocate_field_decl_and_methods(self):
+        s_scope_variables = sum([mem_space[x[VAR_TYPE]] for x in self.scope_stack[self.scope_index].values()])
+        s_scope_methods   = sum([mem_space[x[VAR_TYPE]] for x in self.method_vars.values()])
+        space_to_be_allocated =  s_scope_variables + s_scope_methods
+        var_pos = 0
+        for variable in self.scope_stack[self.scope_index]:
+            self.scope_stack[self.scope_index][variable].append(var_pos)
+            var_pos += mem_space[self.scope_stack[self.scope_index][variable][VAR_TYPE]]
+        self.assembler_sections[self.current_section].append(f'\taddi $sp $sp -{space_to_be_allocated} # scope variable allocation\n')
     
     def opening_curly(self):
         self.scope_stack.append({})
@@ -148,7 +176,9 @@ class codegen:
         self.scope_stack.pop()
         self.scope_index -= 1
         if (not self.main_detected) and  (self.method_detected):
-            self.assembler_sections[self.current_section].append(f'\tjr $ra\n')
+            # self.assembler_sections[self.current_section].append(f'\tjr $ra\n') ????
+            print("3")
+            self.assembler_sections[self.current_section].append(f'\tj {ENDING_TAG}\n')
         self.method_detected = self.main_detected = False
     
     def method_decl_kleene(self, edges):
@@ -160,33 +190,37 @@ class codegen:
             else:
                 method_type = method_type[PARENT]
             # reserve memory
-            self.stack_ptr -= mem_space[method_type]
-            self.next_scope_pending_vars[method_name] = (method_type, self.stack_ptr)
+            # self.stack_ptr -= mem_space[method_type]
+            # self.scope_stack[self.scope_index][method_name] = [method_type]
             # codegen
             if method_name == 'main':
                 self.current_section = 0
                 self.assembler_sections[0].insert(0, f'{method_name}:\n')
                 self.main_detected = True
             else:
-                self.assembler_sections.append([])
                 self.current_section += 1
                 self.current_section = (len(self.assembler_sections) - 1)
-                self.assembler_sections[-1].append(f'{METHOD_PREFIX}{method_name}:\n')
+                self.assembler_sections[self.current_section].append(f'{METHOD_PREFIX}{method_name}:\n')
                 self.main_detected = False
-            # if mem_space[method_type] != 0:
-            #     self.assembler_sections[self.current_section].append(f'\taddi $sp $sp -{mem_space[method_type]} # return {method_type} {method_name} \n')
             self.method_detected = True
     
     def statement(self, edges):
         productions = [self.ast[x][PARENT] for x in edges]
         if productions == ['<assignment_statement>']:
             # ['%id%', '<subscript>', '<assign_op>', '<expr>', ';']
-            # var_name = self.ast[self.ast[self.ast[edges[0]][PTR][0]][PTR]][PARENT]
-            subscript_offset = None
-            if self.ast[self.ast[edges[0]][PTR][1]][PTR]:
-                EXPR = 1
-                subscript_offset = self.expr(self.ast[self.ast[self.ast[edges[0]][PTR][1]][PTR][EXPR]][PTR])
-            print(subscript_offset)
+            RHS_EXPR = 3
+            rhs_expr_reg = self.expr(self.ast[self.ast[edges[0]][PTR][RHS_EXPR]][PTR])
+            # var_name = self.get_var_attributes()
+            LHS_VAR = 0
+            var_name = self.ast[self.ast[self.ast[edges[PARENT]][PTR][LHS_VAR]][PTR]][PARENT]
+            var_attr = self.get_var_attributes(var_name)
+            if self.ast[self.ast[edges[0]][PTR][1]][PTR]: # subscript == epsilon?
+                SUBS_EXPR = 1
+                subscript_offset_expr_reg = self.expr(self.ast[self.ast[self.ast[edges[0]][PTR][1]][PTR][SUBS_EXPR]][PTR])
+                # here goes what we need to do with the subscript
+            # else:
+                
+            
         elif productions == ['<method_call>', ';']:
             pass
         elif productions == ['if', '<expr>', '<block>', '<else_block>']:
@@ -214,32 +248,69 @@ class codegen:
     def expr(self, edges):
         productions = [self.ast[x][PARENT] for x in edges]
         if (productions == ['%id%', '<subscript>']):
-            pass
+            return 
         elif (productions == ['<literal>']):
             next_prod = self.ast[self.ast[edges[0]][PTR][0]][PARENT]
             value = self.ast[self.ast[self.ast[edges[0]][PTR][0]][PTR]][PARENT]
+            val = str()
             if (next_prod == '%int_literal%'):
-                return value
+                val = value
             elif (next_prod == '%char_literal%'):
-                print("CHAR:", next_prod)
-                return value
+                val = str(ord(value[1])) # ' <char> '
             elif (next_prod == '%bool_literal%'):
-                if value == 'true':
-                    return 1
-                elif value == 'false':
-                    return 0
-                else:
-                    print(f'Codegen error: {next_prod} has value={value} that is undefined.')
+                if value == 'true': val = '1'
+                elif value == 'false': val = '0'
+                else: self.std_error('boolean is assigned value that is not \'true\' or \'false\'')
+            else:
+                self.std_error(f'<literal> is having value that is not defined {next_prod}')
+            temp = self.get_vacant_temp()
+            self.assembler_sections[self.current_section].append(f'\tli {temp} {val}\n')
+            return temp
         elif (productions == ['<expr>', '<bin_op>', '<expr>']):
             pass
         elif (productions == ['%minus%', '<expr>']):
-            pass
+            right_expr_reg = self.expr(self.ast[edges[1]])
+            self.assembler_sections[self.current_section].append(f'sub {right_expr_reg} $zero {right_expr_reg}')
+            return right_expr_reg
         elif (productions == ['!', '<expr>']):
-            pass
+            right_expr_reg = self.expr(self.ast[edges[1]])
+            self.assembler_sections[self.current_section].append(f'nor {right_expr_reg} {right_expr_reg} {right_expr_reg}')
+            return right_expr_reg
         elif (productions == ['(', '<expr>', ')']):
-            pass
+            center_expr_reg = self.expr(self.ast[edges[1][PTR]])
+            return center_expr_reg
         elif (productions == ['(', '<expr>', '<bin_op>', '<expr>', ')']):
-            pass
+            left_expr_reg   = self.expr(self.ast[edges[1]][PTR])
+            bin_op_tup      = self.ast[self.ast[edges[2]][PTR][0]]
+            right_expr_reg  = self.expr(self.ast[edges[3]][PTR])
+            bin_op = str()
+            if (bin_op_tup[PARENT] == '<arith_op>'):
+                bin_op = self.ast[bin_op_tup[PTR][0]][PARENT]
+                if (bin_op == '%plus%'): 
+                    self.assembler_sections[self.current_section].append(f'')
+                elif (bin_op == '%minus%'): 
+                    # ['sub']
+                    self.assembler_sections[self.current_section].append(f'')
+                elif (bin_op == '%mult%'): 
+                    # ['mult', 'mfhi', 'mflo']
+                    self.assembler_sections[self.current_section].append(f'')
+                elif (bin_op == '%div%'): 
+                    # ['div', 'mfhi', 'mflo']
+                    self.assembler_sections[self.current_section].append(f'')
+                elif (bin_op == '%mod%'): 
+                    # ['div', 'mfhi']
+                    self.assembler_sections[self.current_section].append(f'')
+                else:
+                    self.std_error(f'unrecognized operator for <expr> {bin_op}')
+            elif (bin_op_tup[PARENT] == '%rel_op%'):
+                pass
+            elif (bin_op_tup[PARENT] == '%eq_op%'):
+                pass
+            elif (bin_op_tup[PARENT] == '%cond_op%'):
+                pass
+        else:
+            self.std_error(f'no <expr> form detected {productions}')
+
 
     def method_call(self, edges):
         # %id% ( )
@@ -253,3 +324,36 @@ class codegen:
                 self.assembler_sections[self.current_section].append(f'\tjal {var_name} # method call\n')
             elif prod == 'callout':
                 pass
+    
+    def get_var_attributes(self, var_name):
+        if self.scope_stack[self.scope_index].get(var_name):
+            return self.scope_stack[self.scope_index][var_name]
+        else:
+            index = self.scope_index
+            while index >= 0:
+                if self.scope_stack[index].get(var_name):
+                    return self.scope_stack[index][var_name]
+                index -= 1
+            self.std_error(f'{var_name} was not found in current scope nor in any previous scope.')
+    
+    def get_vacant_temp(self):
+        if len(temp_reg[VACANT]):
+            popped = temp_reg[VACANT].pop()
+            temp_reg[OCCUPIED].add(popped)
+            return popped
+        else:
+            print(f"Codegen error: not enough registers to compute operation {temp_reg}")
+    
+    def std_error(self, error_str):
+        print(f'Codegen error: {error_str}')
+        exit(-1)
+
+s = scanner('./src_code.decaf', './tokens', build=1, save=0)
+l = lr_0('<program>', './productions.yaml', build=1, save=0)
+t = lr_0_t(l)
+p = parser(t, s)
+with open('tree_debug.txt', mode='w+') as file:
+    file.write(str(p))
+    file.close()
+s = semantic(p)
+c = codegen(s, 'a.executable')

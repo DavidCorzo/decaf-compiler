@@ -1,16 +1,14 @@
 class Program {
     int y;
-    int t[10];
+    int t;
+    boolean t1;
+    boolean t3;
+    boolean t4;
+    boolean t5;
     def boolean dummy(int t, int k) {
-        int i;
-        i = 0;
-        y = 0; 
-        t[0] = 'a';
-        for ((i < 10) ; i += 1; ) {
-            if (i % 2) {
-                y += 10;
-            }
-        }
-        callout ("hello", (78+6), 0xF, 670);
+        y = ((89+1)*78);
+    }
+    def void main(int argc) {
+        
     }
 }
