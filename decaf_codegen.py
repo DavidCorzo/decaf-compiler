@@ -9,7 +9,8 @@ METHOD_PREFIX, METHOD_POSTFIX = 'MB', 'ME'
 FINISH_TAG, MAIN = 'finish:', 0
 BEGIN_PROGRAM_MAIN = ['.data\n', '.text\n']
 ENDING_TAG = 'end_program'
-END_PROGRAM_MAIN = [f'{ENDING_TAG}:\n', '\t# end program\n', '\tli $v0, 10\n', '\tsyscall\n']
+END_PROGRAM_MAIN = [f'\tj {ENDING_TAG}\n']
+END_PROGRAM_TAG = [f'{ENDING_TAG}:\n', '\t# end program\n', '\tli $v0, 10\n', '\tsyscall\n']
 
 OCCUPIED, VACANT = 'OCCUPIED', 'VACANT'
 temp_reg = {
@@ -17,9 +18,15 @@ temp_reg = {
     OCCUPIED: set()
 }
 
+def tag_gen():
+    i = 0
+    while True:
+        yield (f'begin_tag_{i}', f'end_tag_{i}')
+        i += 1
+
 
 class codegen:
-    def __init__(self, assembled_semantic:semantic, executable_filename='a.executable'):
+    def __init__(self, assembled_semantic:semantic, executable_filename='a.asm'):
         self.ast                        = assembled_semantic.ast
         self.ast_head                   = assembled_semantic.ast_head
         self.exprs_return               = assembled_semantic.exprs
@@ -33,19 +40,23 @@ class codegen:
         self.main_detected              = False
         self.method_detected            = False
         self.method_vars                = {}
+        self.tag_gen                    = tag_gen()
+        self.processed_expr             = set()
         self.allocate_methods([self.ast_head])
         self.initiate()
-        # print(self.assembler_sections)
         self.write_exe(executable_filename)
     
     def write_exe(self, executable_filename):
         with open(executable_filename, mode='w+') as file:
+            file.truncate(0)
             file.writelines(BEGIN_PROGRAM_MAIN)
             file.writelines(self.assembler_sections[0])
             file.writelines(END_PROGRAM_MAIN)
             for section in self.assembler_sections[1:]:
                 for instruction in section:
+                    print(instruction, end='')
                     file.write(instruction)
+            file.writelines(END_PROGRAM_TAG)
     
     def allocate_methods(self, list_node_i):
         for node_index in list_node_i:
@@ -89,7 +100,7 @@ class codegen:
             elif (prod == '<statement>'):
                 self.statement(edges)
                 continue
-            elif (prod == '<expr>'):
+            if (prod == '<expr>'):
                 self.expr(edges)
             elif (prod == '{'):
                 self.opening_curly()
@@ -148,7 +159,8 @@ class codegen:
         for variable in self.scope_stack[self.scope_index]:
             self.scope_stack[self.scope_index][variable].append(var_pos)
             var_pos += mem_space[self.scope_stack[self.scope_index][variable][VAR_TYPE]]
-        self.assembler_sections[self.current_section].append(f'\taddi $sp $sp -{space_to_be_allocated} # scope variable allocation\n')
+        if space_to_be_allocated:
+            self.assembler_sections[self.current_section].append(f'\taddi $sp $sp -{space_to_be_allocated} # scope variable allocation 1\n')
 
     def allocate_field_decl_and_methods(self):
         s_scope_variables = sum([mem_space[x[VAR_TYPE]] for x in self.scope_stack[self.scope_index].values()])
@@ -158,7 +170,7 @@ class codegen:
         for variable in self.scope_stack[self.scope_index]:
             self.scope_stack[self.scope_index][variable].append(var_pos)
             var_pos += mem_space[self.scope_stack[self.scope_index][variable][VAR_TYPE]]
-        self.assembler_sections[self.current_section].append(f'\taddi $sp $sp -{space_to_be_allocated} # scope variable allocation\n')
+        self.assembler_sections[self.current_section].append(f'\taddi $sp $sp -{space_to_be_allocated} # scope variable allocation 2\n')
     
     def opening_curly(self):
         self.scope_stack.append({})
@@ -172,12 +184,12 @@ class codegen:
         deallocate = 0
         for att in self.scope_stack[-1].values():
             deallocate += mem_space[att[VAR_TYPE]]
-        self.assembler_sections[self.current_section].append(f'\taddi $sp $sp {deallocate} # out of scope deallocation\n')
+        if deallocate:
+            self.assembler_sections[self.current_section].append(f'\taddi $sp $sp {deallocate} # out of scope deallocation\n')
         self.scope_stack.pop()
         self.scope_index -= 1
         if (not self.main_detected) and  (self.method_detected):
             # self.assembler_sections[self.current_section].append(f'\tjr $ra\n') ????
-            print("3")
             self.assembler_sections[self.current_section].append(f'\tj {ENDING_TAG}\n')
         self.method_detected = self.main_detected = False
     
@@ -219,8 +231,11 @@ class codegen:
                 subscript_offset_expr_reg = self.expr(self.ast[self.ast[self.ast[edges[0]][PTR][1]][PTR][SUBS_EXPR]][PTR])
                 # here goes what we need to do with the subscript
             # else:
-                
-            
+            self.assembler_sections[self.current_section].append(f'\tsw {rhs_expr_reg} {var_attr[SP_POS]}($sp)\n')
+            self.unoccupy_var_temp(rhs_expr_reg)
+            print(self.scope_stack, self.stack_ptr)
+            print(temp_reg)
+
         elif productions == ['<method_call>', ';']:
             pass
         elif productions == ['if', '<expr>', '<block>', '<else_block>']:
@@ -248,7 +263,11 @@ class codegen:
     def expr(self, edges):
         productions = [self.ast[x][PARENT] for x in edges]
         if (productions == ['%id%', '<subscript>']):
-            return 
+            var_name = self.ast[self.ast[edges[0]][PTR]][PARENT]
+            var_attr = self.get_var_attributes(var_name)
+            temp = self.get_vacant_temp()
+            self.assembler_sections[self.current_section].append(f'\tlw {temp} {var_attr[SP_POS]}($sp)\n')
+            return temp
         elif (productions == ['<literal>']):
             next_prod = self.ast[self.ast[edges[0]][PTR][0]][PARENT]
             value = self.ast[self.ast[self.ast[edges[0]][PTR][0]][PTR]][PARENT]
@@ -266,8 +285,6 @@ class codegen:
             temp = self.get_vacant_temp()
             self.assembler_sections[self.current_section].append(f'\tli {temp} {val}\n')
             return temp
-        elif (productions == ['<expr>', '<bin_op>', '<expr>']):
-            pass
         elif (productions == ['%minus%', '<expr>']):
             right_expr_reg = self.expr(self.ast[edges[1]])
             self.assembler_sections[self.current_section].append(f'sub {right_expr_reg} $zero {right_expr_reg}')
@@ -279,35 +296,134 @@ class codegen:
         elif (productions == ['(', '<expr>', ')']):
             center_expr_reg = self.expr(self.ast[edges[1][PTR]])
             return center_expr_reg
-        elif (productions == ['(', '<expr>', '<bin_op>', '<expr>', ')']):
-            left_expr_reg   = self.expr(self.ast[edges[1]][PTR])
-            bin_op_tup      = self.ast[self.ast[edges[2]][PTR][0]]
-            right_expr_reg  = self.expr(self.ast[edges[3]][PTR])
+        elif (productions == ['<expr>', '<bin_op>', '<expr>']) or (productions == ['(', '<expr>', '<bin_op>', '<expr>', ')']):
+            if (productions == ['<expr>', '<bin_op>', '<expr>']):
+                left_expr_reg   = self.expr(self.ast[edges[0]][PTR])
+                bin_op_tup      = self.ast[self.ast[edges[1]][PTR][0]]
+                right_expr_reg  = self.expr(self.ast[edges[2]][PTR])
+            else:
+                left_expr_reg   = self.expr(self.ast[edges[1]][PTR])
+                bin_op_tup      = self.ast[self.ast[edges[2]][PTR][0]]
+                right_expr_reg  = self.expr(self.ast[edges[3]][PTR])
             bin_op = str()
             if (bin_op_tup[PARENT] == '<arith_op>'):
                 bin_op = self.ast[bin_op_tup[PTR][0]][PARENT]
                 if (bin_op == '%plus%'): 
-                    self.assembler_sections[self.current_section].append(f'')
+                    self.assembler_sections[self.current_section].append(f'\tadd {left_expr_reg} {left_expr_reg} {right_expr_reg}\n')
+                    self.unoccupy_var_temp(right_expr_reg)
+                    return left_expr_reg
                 elif (bin_op == '%minus%'): 
                     # ['sub']
-                    self.assembler_sections[self.current_section].append(f'')
+                    self.assembler_sections[self.current_section].append(f'\tsub {left_expr_reg} {left_expr_reg} {right_expr_reg}\n')
+                    self.unoccupy_var_temp(right_expr_reg)
+                    return left_expr_reg
                 elif (bin_op == '%mult%'): 
-                    # ['mult', 'mfhi', 'mflo']
-                    self.assembler_sections[self.current_section].append(f'')
+                    # ['mult', 'mfhi', 'mflo'] get the lower register.
+                    self.assembler_sections[self.current_section].append(f'\tmult {left_expr_reg} {right_expr_reg}\n')
+                    self.assembler_sections[self.current_section].append(f'\tmflo {left_expr_reg}\n')
+                    self.unoccupy_var_temp(right_expr_reg)
+                    return left_expr_reg
                 elif (bin_op == '%div%'): 
-                    # ['div', 'mfhi', 'mflo']
-                    self.assembler_sections[self.current_section].append(f'')
+                    # ['div', 'mflo'] integer div
+                    self.assembler_sections[self.current_section].append(f'\tdiv {left_expr_reg} {right_expr_reg}\n')
+                    self.assembler_sections[self.current_section].append(f'\tmflo {left_expr_reg}\n')
+                    return left_expr_reg
                 elif (bin_op == '%mod%'): 
-                    # ['div', 'mfhi']
-                    self.assembler_sections[self.current_section].append(f'')
+                    # ['div', 'mfhi'] remainder reg
+                    self.assembler_sections[self.current_section].append(f'\tdiv {left_expr_reg} {right_expr_reg}\n')
+                    self.assembler_sections[self.current_section].append(f'\tmfhi {left_expr_reg}\n')
+                    self.unoccupy_var_temp(right_expr_reg)
+                    return left_expr_reg
                 else:
                     self.std_error(f'unrecognized operator for <expr> {bin_op}')
             elif (bin_op_tup[PARENT] == '%rel_op%'):
-                pass
+                # '%rel_op%': "<|>|(<·=)|(>·=)"
+                symbol = self.ast[bin_op_tup[PTR]][PARENT]
+                if (symbol == '<'):
+                    self.assembler_sections[self.current_section].append(f'\tslt {left_expr_reg} {left_expr_reg} {right_expr_reg}\n')
+                    self.unoccupy_var_temp(right_expr_reg)
+                    return left_expr_reg
+                elif (symbol == '>'):
+                    self.assembler_sections[self.current_section].append(f'\tslt {left_expr_reg} {right_expr_reg} {left_expr_reg}\n')
+                    self.unoccupy_var_temp(right_expr_reg)
+                    return left_expr_reg
+                elif (symbol == '<='):
+                    true_tag, fin_cond = next(self.tag_gen)
+                    self.assembler_sections[self.current_section].append(f'\tblt {left_expr_reg} {right_expr_reg} {true_tag}\n')
+                    self.assembler_sections[self.current_section].append(f'\tbeq {left_expr_reg} {right_expr_reg} {true_tag}\n')
+                    self.assembler_sections[self.current_section].append(f'\tli {left_expr_reg} 0 # false\n')
+                    self.assembler_sections[self.current_section].append(f'\tj {fin_cond}\n')
+                    self.assembler_sections[self.current_section].append(f'\t{true_tag}:\n')
+                    self.assembler_sections[self.current_section].append(f'\t\tli {left_expr_reg} 1 # true\n')
+                    self.assembler_sections[self.current_section].append(f'\t\tj {fin_cond}\n')
+                    self.assembler_sections[self.current_section].append(f'\t{fin_cond}:\n')
+                    self.unoccupy_var_temp(right_expr_reg)
+                    return left_expr_reg
+                elif (symbol == '>='):
+                    true_tag, fin_cond = next(self.tag_gen)
+                    self.assembler_sections[self.current_section].append(f'\tbgt {left_expr_reg} {right_expr_reg} {true_tag}\n')
+                    self.assembler_sections[self.current_section].append(f'\tbeq {left_expr_reg} {right_expr_reg} {true_tag}\n')
+                    self.assembler_sections[self.current_section].append(f'\tli {left_expr_reg} 0 # false\n')
+                    self.assembler_sections[self.current_section].append(f'\tj {fin_cond}\n')
+                    self.assembler_sections[self.current_section].append(f'\t{true_tag}:\n')
+                    self.assembler_sections[self.current_section].append(f'\t\tli {left_expr_reg} 1 # true\n')
+                    self.assembler_sections[self.current_section].append(f'\t\tj {fin_cond}\n')
+                    self.assembler_sections[self.current_section].append(f'\t{fin_cond}:\n')
+                    self.unoccupy_var_temp(right_expr_reg)
+                    return left_expr_reg
             elif (bin_op_tup[PARENT] == '%eq_op%'):
-                pass
+                symbol = self.ast[bin_op_tup[PTR]][PARENT]
+                if (symbol == '=='):
+                    true_tag, fin_cond = next(self.tag_gen)
+                    self.assembler_sections[self.current_section].append(f'\tbeq {left_expr_reg} {right_expr_reg} {true_tag}\n')
+                    self.assembler_sections[self.current_section].append(f'\tli {left_expr_reg} 0 # false\n')
+                    self.assembler_sections[self.current_section].append(f'\tj {fin_cond}\n')
+                    self.assembler_sections[self.current_section].append(f'\t{true_tag}:\n')
+                    self.assembler_sections[self.current_section].append(f'\t\tli {left_expr_reg} 1 # true\n')
+                    self.assembler_sections[self.current_section].append(f'\t\tj {fin_cond}\n')
+                    self.assembler_sections[self.current_section].append(f'\t{fin_cond}:\n')
+                    self.unoccupy_var_temp(right_expr_reg)
+                    return left_expr_reg
+                elif (symbol == '!='):
+                    true_tag, fin_cond = next(self.tag_gen)
+                    self.assembler_sections[self.current_section].append(f'\tbne {left_expr_reg} {right_expr_reg} {true_tag}\n')
+                    self.assembler_sections[self.current_section].append(f'\tli {left_expr_reg} 0 # false\n')
+                    self.assembler_sections[self.current_section].append(f'\tj {fin_cond}\n')
+                    self.assembler_sections[self.current_section].append(f'\t{true_tag}:\n')
+                    self.assembler_sections[self.current_section].append(f'\t\tli {left_expr_reg} 1 # true\n')
+                    self.assembler_sections[self.current_section].append(f'\t\tj {fin_cond}\n')
+                    self.assembler_sections[self.current_section].append(f'\t{fin_cond}:\n')
+                    self.unoccupy_var_temp(right_expr_reg)
+                    return left_expr_reg
             elif (bin_op_tup[PARENT] == '%cond_op%'):
-                pass
+                # '%cond_op%': "&·&|\\|·\\|"
+                symbol = self.ast[bin_op_tup[PTR]][PARENT]
+                if (symbol == '&&'):
+                    false_tag, fin_cond = next(self.tag_gen)
+                    self.assembler_sections[self.current_section].apend(f'\tbeq {left_expr_reg} $zero {false_tag}\n')
+                    self.assembler_sections[self.current_section].apend(f'\tbeq {right_expr_reg} $zero {false_tag}\n')
+                    self.assembler_sections[self.current_section].apend(f'\t# true\n')
+                    self.assembler_sections[self.current_section].apend(f'\tli {left_expr_reg} 1\n')
+                    self.assembler_sections[self.current_section].apend(f'\tj {fin_cond}\n')
+                    self.assembler_sections[self.current_section].apend(f'\t{false_tag}:\n')
+                    self.assembler_sections[self.current_section].apend(f'\t\tli {left_expr_reg} 0\n')
+                    self.assembler_sections[self.current_section].apend(f'\t\tj {fin_cond}\n')
+                    self.assembler_sections[self.current_section].apend(f'\t{fin_cond}:')
+                    self.unoccupy_var_temp(right_expr_reg)
+                    return left_expr_reg
+                elif (symbol == '||'):
+                    true_tag, fin_cond = next(self.tag_gen)
+                    self.assembler_sections[self.current_section].append(f'\tbne {left_expr_reg} $zero {true_tag}\n')
+                    self.assembler_sections[self.current_section].append(f'\tbne {right_expr_reg} $zero {true_tag}\n')
+                    self.assembler_sections[self.current_section].append(f'\t# false\n')
+                    self.assembler_sections[self.current_section].append(f'\tli {left_expr_reg} 0\n')
+                    self.assembler_sections[self.current_section].append(f'\tj {fin_cond}\n')
+                    self.assembler_sections[self.current_section].append(f'\t{true_tag}:\n')
+                    self.assembler_sections[self.current_section].append(f'\t\tli {left_expr_reg} 1\n')
+                    self.assembler_sections[self.current_section].append(f'\t\tj {fin_cond}\n')
+                    self.assembler_sections[self.current_section].append(f'\t{fin_cond}:\n')
+                    self.unoccupy_var_temp(right_expr_reg)
+                    return left_expr_reg
         else:
             self.std_error(f'no <expr> form detected {productions}')
 
@@ -344,6 +460,10 @@ class codegen:
         else:
             print(f"Codegen error: not enough registers to compute operation {temp_reg}")
     
+    def unoccupy_var_temp(self, reg):
+        temp_reg[OCCUPIED].remove(reg)
+        temp_reg[VACANT].add(reg)
+    
     def std_error(self, error_str):
         print(f'Codegen error: {error_str}')
         exit(-1)
@@ -356,4 +476,4 @@ with open('tree_debug.txt', mode='w+') as file:
     file.write(str(p))
     file.close()
 s = semantic(p)
-c = codegen(s, 'a.executable')
+c = codegen(s)

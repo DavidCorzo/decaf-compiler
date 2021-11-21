@@ -1,14 +1,8 @@
 class Program {
-    int y;
-    int t;
-    boolean t1;
-    boolean t3;
-    boolean t4;
-    boolean t5;
-    def boolean dummy(int t, int k) {
-        y = ((89+1)*78);
-    }
-    def void main(int argc) {
-        
+    int y, j, l;
+    def void main() {
+        y = (((10+4)*10)*(1-3));
+        l = 9;
+        j = (6 + l);
     }
 }
