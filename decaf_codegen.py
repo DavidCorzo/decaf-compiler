@@ -1,29 +1,47 @@
 from yaml import parse
 from decaf_scanner import scanner
-from decaf_parser import lr_0, lr_0_t, parser, is_nonterminal, is_pseudo_terminal, PARENT, PTR, CHILDREN
+from decaf_parser import lr_0, lr_0_t, parser, is_nonterminal, is_pseudo_terminal, PARENT, PTR, CHILDREN, print_dict
 from decaf_semantic import semantic
+
+DOT_DATA = '\tendl: .asciiz "\\n"\n\n'
 
 mem_space = {'int':4, 'boolean': 1, 'class': 0, 'void': 0}
 VAR_TYPE, SP_POS = 0, 1
 METHOD_PREFIX, METHOD_POSTFIX = 'MB', 'ME'
 FINISH_TAG, MAIN = 'finish:', 0
-BEGIN_PROGRAM_MAIN = ['.data\n', '.text\n']
+BEGIN_PROGRAM_MAIN = [f'.data\n {DOT_DATA}', '.text\n']
 ENDING_TAG = 'end_program'
 END_PROGRAM_MAIN = [f'\tj {ENDING_TAG}\n']
 END_PROGRAM_TAG = [f'{ENDING_TAG}:\n', '\t# end program\n', '\tli $v0, 10\n', '\tsyscall\n']
 
 OCCUPIED, VACANT = 'OCCUPIED', 'VACANT'
 temp_reg = {
-    VACANT: {'$t0', '$t1', '$t2', '$t3', '$t4', '$t5', '$t6', '$t7', '$t8', '$t9'},
+    VACANT: {'$t0', '$t1', '$t2', '$t3', '$t4', '$t5', '$t6', '$t7'}, # , '$t8', '$t9'
     OCCUPIED: set()
 }
 
-def tag_gen():
+def tag_gen_with_name(beg_name, end_name=None):
     i = 0
     while True:
-        yield (f'begin_tag_{i}', f'end_tag_{i}')
+        if end_name:
+            yield (f'beg_{beg_name}_{i}', f'end_{end_name}_{i}')
+        else:
+            yield (f'beg_{beg_name}_{i}', f'end_{beg_name}_{i}')
         i += 1
 
+IF_COND_TAG_GEN, ELSE_COND_TAG_GEN, FOR_LOOP_TAG_GEN, LESS_THAN_OR_EQUAL_TAG_GEN, GREATER_THAN_OR_EQUAL_TAG_GEN, EQUAL_TAG_GEN, NOT_EQUAL_TAG_GEN, AND_TAG_GEN, OR_TAG_GEN = 'if', 'else_or_end_if', 'for', 'less_than', 'greater_than', 'equal', 'not_equal', 'and', 'or'
+tags_generator = {
+    IF_COND_TAG_GEN                 : tag_gen_with_name(IF_COND_TAG_GEN, ELSE_COND_TAG_GEN),
+    FOR_LOOP_TAG_GEN                : tag_gen_with_name(FOR_LOOP_TAG_GEN),
+    LESS_THAN_OR_EQUAL_TAG_GEN      : tag_gen_with_name(LESS_THAN_OR_EQUAL_TAG_GEN),
+    GREATER_THAN_OR_EQUAL_TAG_GEN   : tag_gen_with_name(GREATER_THAN_OR_EQUAL_TAG_GEN),
+    EQUAL_TAG_GEN                   : tag_gen_with_name(EQUAL_TAG_GEN),
+    NOT_EQUAL_TAG_GEN               : tag_gen_with_name(NOT_EQUAL_TAG_GEN),
+    AND_TAG_GEN                     : tag_gen_with_name(AND_TAG_GEN), 
+    OR_TAG_GEN                      : tag_gen_with_name(OR_TAG_GEN)
+}
+
+print_debug = print
 
 class codegen:
     def __init__(self, assembled_semantic:semantic, executable_filename='a.asm'):
@@ -31,6 +49,8 @@ class codegen:
         self.ast_head                   = assembled_semantic.ast_head
         self.exprs_return               = assembled_semantic.exprs
         self.scope_stack                = list()
+        self.scope_space                = dict()
+        self.method_reg                 = dict()
         self.next_scope_pending_vars    = dict()
         self.assembler_sections         = list()
         self.current_section            = None
@@ -40,8 +60,8 @@ class codegen:
         self.main_detected              = False
         self.method_detected            = False
         self.method_vars                = {}
-        self.tag_gen                    = tag_gen()
         self.processed_expr             = set()
+        self.offset                     = 0
         self.allocate_methods([self.ast_head])
         self.initiate()
         self.write_exe(executable_filename)
@@ -54,7 +74,6 @@ class codegen:
             file.writelines(END_PROGRAM_MAIN)
             for section in self.assembler_sections[1:]:
                 for instruction in section:
-                    print(instruction, end='')
                     file.write(instruction)
             file.writelines(END_PROGRAM_TAG)
     
@@ -77,7 +96,6 @@ class codegen:
         self.current_section = 0
         self.traverse([self.ast_head])
 
-    
     def traverse(self, list_node_i):
         for node_index in list_node_i:
             prod, edges = self.ast[node_index]
@@ -97,11 +115,9 @@ class codegen:
                 continue
             elif (prod == '<method_decl*>'):
                 self.method_decl_kleene(edges)
-            elif (prod == '<statement>'):
-                self.statement(edges)
+            elif (prod == '<statement*>'):
+                self.statement_kleene(edges)
                 continue
-            if (prod == '<expr>'):
-                self.expr(edges)
             elif (prod == '{'):
                 self.opening_curly()
             elif (prod == '}'):
@@ -160,17 +176,27 @@ class codegen:
             self.scope_stack[self.scope_index][variable].append(var_pos)
             var_pos += mem_space[self.scope_stack[self.scope_index][variable][VAR_TYPE]]
         if space_to_be_allocated:
-            self.assembler_sections[self.current_section].append(f'\taddi $sp $sp -{space_to_be_allocated} # scope variable allocation 1\n')
+            self.assembler_sections[self.current_section].append(f'\t# {self.scope_stack[self.scope_index]}\n')
+            self.assembler_sections[self.current_section].append(f'\taddi $sp $sp -{space_to_be_allocated} # var alloc\n')
+        if self.scope_space.get(self.scope_index):
+            self.scope_space[self.scope_index] += space_to_be_allocated
+        else:
+            self.scope_space[self.scope_index] = space_to_be_allocated
 
     def allocate_field_decl_and_methods(self):
         s_scope_variables = sum([mem_space[x[VAR_TYPE]] for x in self.scope_stack[self.scope_index].values()])
-        s_scope_methods   = sum([mem_space[x[VAR_TYPE]] for x in self.method_vars.values()])
+        s_scope_methods   = 0 # use v sum([mem_space[x[VAR_TYPE]] for x in self.method_vars.values()])
         space_to_be_allocated =  s_scope_variables + s_scope_methods
         var_pos = 0
         for variable in self.scope_stack[self.scope_index]:
             self.scope_stack[self.scope_index][variable].append(var_pos)
             var_pos += mem_space[self.scope_stack[self.scope_index][variable][VAR_TYPE]]
-        self.assembler_sections[self.current_section].append(f'\taddi $sp $sp -{space_to_be_allocated} # scope variable allocation 2\n')
+        self.assembler_sections[self.current_section].append(f'\t# {self.scope_stack[self.scope_index]}\n')
+        self.assembler_sections[self.current_section].append(f'\taddi $sp $sp -{space_to_be_allocated} # field_decl & methods alloc\n')
+        if self.scope_space.get(self.scope_index):
+            self.scope_space[self.scope_index] += space_to_be_allocated
+        else:
+            self.scope_space[self.scope_index] = space_to_be_allocated
     
     def opening_curly(self):
         self.scope_stack.append({})
@@ -188,8 +214,10 @@ class codegen:
             self.assembler_sections[self.current_section].append(f'\taddi $sp $sp {deallocate} # out of scope deallocation\n')
         self.scope_stack.pop()
         self.scope_index -= 1
-        if (not self.main_detected) and  (self.method_detected):
-            # self.assembler_sections[self.current_section].append(f'\tjr $ra\n') ????
+        if (self.method_detected):
+            self.assembler_sections[self.current_section].append(f'\taddi $sp $sp {self.offset} # frame dealloc\n')
+            self.offset = 0
+        if (self.main_detected):
             self.assembler_sections[self.current_section].append(f'\tj {ENDING_TAG}\n')
         self.method_detected = self.main_detected = False
     
@@ -201,72 +229,164 @@ class codegen:
                 method_type = self.ast[method_type[CHILDREN]][PARENT]
             else:
                 method_type = method_type[PARENT]
-            # reserve memory
-            # self.stack_ptr -= mem_space[method_type]
-            # self.scope_stack[self.scope_index][method_name] = [method_type]
-            # codegen
             if method_name == 'main':
                 self.current_section = 0
                 self.assembler_sections[0].insert(0, f'{method_name}:\n')
                 self.main_detected = True
             else:
                 self.current_section += 1
-                self.current_section = (len(self.assembler_sections) - 1)
+                self.assembler_sections.insert(self.current_section, list())
                 self.assembler_sections[self.current_section].append(f'{METHOD_PREFIX}{method_name}:\n')
                 self.main_detected = False
             self.method_detected = True
+            # allocate for the $ra, and all the $s<reg>
+            RETURN_ADDRESS, S_REG, FP = 4, 4*8, 4
+            self.offset = (RETURN_ADDRESS + S_REG + FP)
+            self.stack_ptr -= self.offset
+            self.assembler_sections[self.scope_index].append(f'\taddi $sp $sp -{(RETURN_ADDRESS + S_REG + FP)}\n')
+            self.scope_stack[self.scope_index].update({
+                '$ra': ['int', mem_space['int']*0],
+                '$s0': ['int', mem_space['int']*1],
+                '$s1': ['int', mem_space['int']*2],
+                '$s2': ['int', mem_space['int']*3],
+                '$s3': ['int', mem_space['int']*4],
+                '$s4': ['int', mem_space['int']*5],
+                '$s5': ['int', mem_space['int']*6],
+                '$s6': ['int', mem_space['int']*7],
+                '$s7': ['int', mem_space['int']*8],
+                '$fp': ['int', mem_space['int']*9]
+            })
+            self.assembler_sections[self.current_section].append(f'\t# stack frame allocation\n')
+            self.assembler_sections[self.current_section].append(f'\tsw $ra {mem_space["int"]*0}($sp)\n')
+            self.assembler_sections[self.current_section].append(f'\tsw $s0 {mem_space["int"]*1}($sp)\n')
+            self.assembler_sections[self.current_section].append(f'\tsw $s1 {mem_space["int"]*2}($sp)\n')
+            self.assembler_sections[self.current_section].append(f'\tsw $s2 {mem_space["int"]*3}($sp)\n')
+            self.assembler_sections[self.current_section].append(f'\tsw $s3 {mem_space["int"]*4}($sp)\n')
+            self.assembler_sections[self.current_section].append(f'\tsw $s4 {mem_space["int"]*5}($sp)\n')
+            self.assembler_sections[self.current_section].append(f'\tsw $s5 {mem_space["int"]*6}($sp)\n')
+            self.assembler_sections[self.current_section].append(f'\tsw $s6 {mem_space["int"]*7}($sp)\n')
+            self.assembler_sections[self.current_section].append(f'\tsw $s7 {mem_space["int"]*8}($sp)\n')
+            self.assembler_sections[self.current_section].append(f'\tsw $fp {mem_space["int"]*9}($sp)\n')
+    
+    def statement_kleene(self, edges):
+        if edges:
+            for node_index in edges:
+                prod, edge = self.ast[node_index]
+                if prod == '<statement>':
+                    self.statement(edge)
+                    continue
+                elif is_nonterminal(prod) and (edge != None):
+                    self.statement_kleene(edge)
     
     def statement(self, edges):
         productions = [self.ast[x][PARENT] for x in edges]
         if productions == ['<assignment_statement>']:
             # ['%id%', '<subscript>', '<assign_op>', '<expr>', ';']
-            RHS_EXPR = 3
+            LHS_VAR, SUBS, ASSIGN_OP, RHS_EXPR = 0, 1, 2, 3
+            statement_edges = edges[0]
+            assignment_statement_edges = self.ast[statement_edges][PTR]
             rhs_expr_reg = self.expr(self.ast[self.ast[edges[0]][PTR][RHS_EXPR]][PTR])
-            # var_name = self.get_var_attributes()
-            LHS_VAR = 0
             var_name = self.ast[self.ast[self.ast[edges[PARENT]][PTR][LHS_VAR]][PTR]][PARENT]
-            var_attr = self.get_var_attributes(var_name)
-            if self.ast[self.ast[edges[0]][PTR][1]][PTR]: # subscript == epsilon?
-                SUBS_EXPR = 1
-                subscript_offset_expr_reg = self.expr(self.ast[self.ast[self.ast[edges[0]][PTR][1]][PTR][SUBS_EXPR]][PTR])
-                # here goes what we need to do with the subscript
-            # else:
-            self.assembler_sections[self.current_section].append(f'\tsw {rhs_expr_reg} {var_attr[SP_POS]}($sp)\n')
+            var_offset = self.get_var_position_respect_to_sp(var_name)
+            subscript_expr = self.subscript_reg(assignment_statement_edges[SUBS])
+            assign_op = self.ast[self.ast[assignment_statement_edges[ASSIGN_OP]][PTR][0]][PARENT]
+            if (assign_op == '%assign%'):
+                pass # do nothing
+            elif (assign_op == '%assign_inc%'):
+                temp = self.get_vacant_temp()
+                self.assembler_sections[self.current_section].append(f'\tlw {temp} {var_offset}($sp)\n')
+                self.assembler_sections[self.current_section].append(f'\taddi {rhs_expr_reg} {temp} {rhs_expr_reg}\n')
+                self.unoccupy_var_temp(temp)
+            elif (assign_op == '%assign_dec%'):
+                temp = self.get_vacant_temp()
+                self.assembler_sections[self.current_section].append(f'\tlw {temp} {var_offset}($sp)\n')
+                self.assembler_sections[self.current_section].append(f'\tsubi {rhs_expr_reg} {temp} {rhs_expr_reg}\n')
+                self.unoccupy_var_temp(temp)
+            self.assembler_sections[self.current_section].append(f'\tsw {rhs_expr_reg} {var_offset}($sp)\n')
             self.unoccupy_var_temp(rhs_expr_reg)
-            print(self.scope_stack, self.stack_ptr)
-            print(temp_reg)
-
+            
         elif productions == ['<method_call>', ';']:
             pass
         elif productions == ['if', '<expr>', '<block>', '<else_block>']:
-            pass
+            IF_KW, IF_EXPR, IF_BLOCK, ELSE_BLOCK = 0, 1, 2, 3
+            if_expr_reg = self.expr(self.ast[edges[IF_EXPR]][PTR])
+            if_tag, else_tag = next(tags_generator[IF_COND_TAG_GEN])
+            self.assembler_sections[self.current_section].append(f'\t# if-else statement\n')
+            self.assembler_sections[self.current_section].append(f'\t{if_tag}:\n')
+            self.assembler_sections[self.current_section].append(f'\tbeq {if_expr_reg} $zero {else_tag}\n')
+            self.block(edges[IF_BLOCK])
+            self.assembler_sections[self.current_section].append(f'\t{else_tag}:\n')
+            self.else_block(self.ast[edges[ELSE_BLOCK]][PTR])
         elif productions == ['for', '<for_eval>', '<block>']:
             pass
         elif productions == ['return', ';']:
-            pass
+            # jr with out $v1
+            pass 
         elif productions == ['return', '<expr>', ';']:
-            pass
+            EXPR = 1
+            r_expr = self.expr(self.ast[edges[EXPR]][PTR])
+            self.assembler_sections[self.current_section].append(f'\tmove {r_expr} $v1\n')
+            
         elif productions == ['break', ';']:
             pass
         elif productions == ['continue', ';']:
             pass
         elif productions == ['<block>']:
-            pass
+            self.block(edges[0])
         elif productions == ['<expr>', ';']:
             pass
+        elif productions == ['<print>', ';']:
+            VAR_POS, SUBS_POS = 1, 2 # 'print_var', '%id%', '<subscript>'
+            p_edges = self.ast[edges[0]][PTR]
+            var_name = self.ast[self.ast[p_edges[VAR_POS]][PTR]][PARENT]
+            subs = self.subscript_reg(p_edges[SUBS_POS])
+            var_reg = self.get_var_value_in_reg(var_name)
+            self.assembler_sections[self.current_section].append(f'\t# print(register)\n')
+            self.assembler_sections[self.current_section].append(f'\tli $v0, 1\n')
+            self.assembler_sections[self.current_section].append(f'\tmove $a0, {var_reg}\n')
+            self.assembler_sections[self.current_section].append(f'\tsyscall\n')
+            self.assembler_sections[self.current_section].append(f'\t# print(str1)\n')
+            self.assembler_sections[self.current_section].append(f'\tli $v0, 4\n')
+            self.assembler_sections[self.current_section].append(f'\tla $a0, endl\n')
+            self.assembler_sections[self.current_section].append(f'\tsyscall\n')
+            self.unoccupy_var_temp(var_reg)
     
-    def subscript(self, edge):
-        right_sb = edge[0]
-        offset   = edge[1]
-        left__sb = edge[2]
+    def block(self, block_ptr):
+        LCURLY, VAR_DECL, STATEMENTS, RCURLY = 0, 1, 2, 3
+        block_edges = [self.ast[x] for x in self.ast[block_ptr][PTR]]
+
+        self.opening_curly() # { 
+        self.var_decl_kleene(block_edges[VAR_DECL][PTR]) # <var_decl*>
+        self.statement_kleene(block_edges[STATEMENTS][PTR]) # <statement*>
+        self.closing_curly() # }
+
+    def else_block(self, else_block_edges):
+        ELSE_KW, ELSE_BLOCK = 0, 1
+        self.block(else_block_edges[ELSE_BLOCK])
+    
+    def subscript_reg(self, subscript_ptr):
+        subs_edges = self.ast[subscript_ptr][PTR]
+        if subs_edges:
+            right_sb    = self.ast[subs_edges[0]][PARENT]
+            offset_expr = self.expr(self.ast[subs_edges[1]][PTR])
+            left__sb    = self.ast[subs_edges[2]][PARENT]
+            return offset_expr
+        else:
+            return None
+
+    def get_var_value_in_reg(self, var_name):
+        var_offset = self.get_var_position_respect_to_sp(var_name)
+        temp = self.get_vacant_temp()
+        self.assembler_sections[self.current_section].append(f'\tlw {temp} {var_offset}($sp)\n')
+        return temp
     
     def expr(self, edges):
         productions = [self.ast[x][PARENT] for x in edges]
         if (productions == ['%id%', '<subscript>']):
             var_name = self.ast[self.ast[edges[0]][PTR]][PARENT]
-            var_attr = self.get_var_attributes(var_name)
+            var_offset = self.get_var_position_respect_to_sp(var_name)
             temp = self.get_vacant_temp()
-            self.assembler_sections[self.current_section].append(f'\tlw {temp} {var_attr[SP_POS]}($sp)\n')
+            self.assembler_sections[self.current_section].append(f'\tlw {temp} {var_offset}($sp)\n')
             return temp
         elif (productions == ['<literal>']):
             next_prod = self.ast[self.ast[edges[0]][PTR][0]][PARENT]
@@ -286,15 +406,15 @@ class codegen:
             self.assembler_sections[self.current_section].append(f'\tli {temp} {val}\n')
             return temp
         elif (productions == ['%minus%', '<expr>']):
-            right_expr_reg = self.expr(self.ast[edges[1]])
-            self.assembler_sections[self.current_section].append(f'sub {right_expr_reg} $zero {right_expr_reg}')
+            right_expr_reg = self.expr(self.ast[edges[1]][PTR])
+            self.assembler_sections[self.current_section].append(f'\tsub {right_expr_reg} $zero {right_expr_reg}\n')
             return right_expr_reg
-        elif (productions == ['!', '<expr>']):
-            right_expr_reg = self.expr(self.ast[edges[1]])
-            self.assembler_sections[self.current_section].append(f'nor {right_expr_reg} {right_expr_reg} {right_expr_reg}')
+        elif (productions == ['(', '!', '<expr>', ')']):
+            right_expr_reg = self.expr(self.ast[edges[2]][PTR])
+            self.assembler_sections[self.current_section].append(f'\tnor {right_expr_reg} {right_expr_reg} {right_expr_reg}\n')
             return right_expr_reg
         elif (productions == ['(', '<expr>', ')']):
-            center_expr_reg = self.expr(self.ast[edges[1][PTR]])
+            center_expr_reg = self.expr(self.ast[edges[1]][PTR])
             return center_expr_reg
         elif (productions == ['<expr>', '<bin_op>', '<expr>']) or (productions == ['(', '<expr>', '<bin_op>', '<expr>', ')']):
             if (productions == ['<expr>', '<bin_op>', '<expr>']):
@@ -348,7 +468,7 @@ class codegen:
                     self.unoccupy_var_temp(right_expr_reg)
                     return left_expr_reg
                 elif (symbol == '<='):
-                    true_tag, fin_cond = next(self.tag_gen)
+                    true_tag, fin_cond = next(tags_generator[LESS_THAN_OR_EQUAL_TAG_GEN])
                     self.assembler_sections[self.current_section].append(f'\tblt {left_expr_reg} {right_expr_reg} {true_tag}\n')
                     self.assembler_sections[self.current_section].append(f'\tbeq {left_expr_reg} {right_expr_reg} {true_tag}\n')
                     self.assembler_sections[self.current_section].append(f'\tli {left_expr_reg} 0 # false\n')
@@ -360,7 +480,7 @@ class codegen:
                     self.unoccupy_var_temp(right_expr_reg)
                     return left_expr_reg
                 elif (symbol == '>='):
-                    true_tag, fin_cond = next(self.tag_gen)
+                    true_tag, fin_cond = next(tags_generator[GREATER_THAN_OR_EQUAL_TAG_GEN])
                     self.assembler_sections[self.current_section].append(f'\tbgt {left_expr_reg} {right_expr_reg} {true_tag}\n')
                     self.assembler_sections[self.current_section].append(f'\tbeq {left_expr_reg} {right_expr_reg} {true_tag}\n')
                     self.assembler_sections[self.current_section].append(f'\tli {left_expr_reg} 0 # false\n')
@@ -374,7 +494,7 @@ class codegen:
             elif (bin_op_tup[PARENT] == '%eq_op%'):
                 symbol = self.ast[bin_op_tup[PTR]][PARENT]
                 if (symbol == '=='):
-                    true_tag, fin_cond = next(self.tag_gen)
+                    true_tag, fin_cond = next(tags_generator[EQUAL_TAG_GEN])
                     self.assembler_sections[self.current_section].append(f'\tbeq {left_expr_reg} {right_expr_reg} {true_tag}\n')
                     self.assembler_sections[self.current_section].append(f'\tli {left_expr_reg} 0 # false\n')
                     self.assembler_sections[self.current_section].append(f'\tj {fin_cond}\n')
@@ -385,7 +505,7 @@ class codegen:
                     self.unoccupy_var_temp(right_expr_reg)
                     return left_expr_reg
                 elif (symbol == '!='):
-                    true_tag, fin_cond = next(self.tag_gen)
+                    true_tag, fin_cond = next(tags_generator[NOT_EQUAL_TAG_GEN])
                     self.assembler_sections[self.current_section].append(f'\tbne {left_expr_reg} {right_expr_reg} {true_tag}\n')
                     self.assembler_sections[self.current_section].append(f'\tli {left_expr_reg} 0 # false\n')
                     self.assembler_sections[self.current_section].append(f'\tj {fin_cond}\n')
@@ -399,7 +519,7 @@ class codegen:
                 # '%cond_op%': "&·&|\\|·\\|"
                 symbol = self.ast[bin_op_tup[PTR]][PARENT]
                 if (symbol == '&&'):
-                    false_tag, fin_cond = next(self.tag_gen)
+                    false_tag, fin_cond = next(tags_generator[AND_TAG_GEN])
                     self.assembler_sections[self.current_section].apend(f'\tbeq {left_expr_reg} $zero {false_tag}\n')
                     self.assembler_sections[self.current_section].apend(f'\tbeq {right_expr_reg} $zero {false_tag}\n')
                     self.assembler_sections[self.current_section].apend(f'\t# true\n')
@@ -412,7 +532,7 @@ class codegen:
                     self.unoccupy_var_temp(right_expr_reg)
                     return left_expr_reg
                 elif (symbol == '||'):
-                    true_tag, fin_cond = next(self.tag_gen)
+                    true_tag, fin_cond = next(tags_generator[OR_TAG_GEN])
                     self.assembler_sections[self.current_section].append(f'\tbne {left_expr_reg} $zero {true_tag}\n')
                     self.assembler_sections[self.current_section].append(f'\tbne {right_expr_reg} $zero {true_tag}\n')
                     self.assembler_sections[self.current_section].append(f'\t# false\n')
@@ -426,7 +546,6 @@ class codegen:
                     return left_expr_reg
         else:
             self.std_error(f'no <expr> form detected {productions}')
-
 
     def method_call(self, edges):
         # %id% ( )
@@ -442,6 +561,7 @@ class codegen:
                 pass
     
     def get_var_attributes(self, var_name):
+        stack_offset = 0
         if self.scope_stack[self.scope_index].get(var_name):
             return self.scope_stack[self.scope_index][var_name]
         else:
@@ -449,6 +569,19 @@ class codegen:
             while index >= 0:
                 if self.scope_stack[index].get(var_name):
                     return self.scope_stack[index][var_name]
+                index -= 1
+            self.std_error(f'{var_name} was not found in current scope nor in any previous scope.')
+    
+    def get_var_position_respect_to_sp(self, var_name):
+        stack_offset = 0
+        if self.scope_stack[self.scope_index].get(var_name):
+            return (abs(self.scope_stack[self.scope_index][var_name][SP_POS]) + stack_offset)
+        else:
+            index = self.scope_index
+            while index >= 0:
+                if self.scope_stack[index].get(var_name):
+                    return (abs(self.scope_stack[index][var_name][SP_POS]) + stack_offset)
+                stack_offset += self.scope_space[index]
                 index -= 1
             self.std_error(f'{var_name} was not found in current scope nor in any previous scope.')
     

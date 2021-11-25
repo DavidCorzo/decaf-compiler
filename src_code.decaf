@@ -1,8 +1,17 @@
 class Program {
-    int y, j, l;
+    boolean a;
+    int b;
+
+    def int exp(int num) {
+        int n;
+        n = (num*num);
+        return n;
+    }
+
     def void main() {
-        y = (((10+4)*10)*(1-3));
-        l = 9;
-        j = (6 + l);
+        int c;
+        boolean e;
+        a = true;
+        b = ((a + 16)*4);
     }
 }

@@ -651,8 +651,8 @@ class parser:
                 print('\t'*tab+f'level={tab} '+prod+f' ({node_index})')
                 self.print_tree(edge, tab+1, False)
 
-    def error(self, symbol):
-        print(f"Parsing error: no operation for the symbol {symbol}")
+    def error(self, symbol, val):
+        print(f"Parsing error: no operation for the symbol {symbol} '{val}'")
         exit(-1)
     
     def reduce(self, rule):
@@ -724,7 +724,7 @@ class parser:
             else:
                 print(self.productions_stack, '\n')
                 print(s)
-                self.error(token)
+                self.error(token, value)
             # operation found
             if  operation == SHIFT:
                 self.shift(param, self.lexed_tokens[index])

@@ -75,6 +75,7 @@
   - ['continue', ';']
   - ['<block>']
   - ['<expr>', ';']
+  - ['<print>', ';']
 <else_block>:
   - ['else', '<block>']
   - [null]
@@ -110,9 +111,11 @@
   - ['<literal>']
   - ['<expr>', '<bin_op>', '<expr>']
   - ['%minus%', '<expr>']
-  - ['!', '<expr>']
+  - ['(', '!', '<expr>', ')']
   - ['(', '<expr>', ')']
   - ['(', '<expr>', '<bin_op>', '<expr>', ')']
+<print>:
+  - ['print_var', '%id%', '<subscript>']
 ###############
 # <callout_arg>
 ###############

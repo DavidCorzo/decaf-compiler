@@ -3,13 +3,18 @@ str: .asciiz "\n"
 
 .text
 main:
-    addi $sp $sp -8
-    li $t0 10 # 4
-    li $t1 14 # 4
-    sw $t0, 0($sp)
-    sw $t1, 4($sp)
-    lw $t0, 0($sp)
-    lw $t1, 4($sp)
+
+    beq 
+
+    # li $t0 10
+    # li $t1 1
+    # for:
+    #     beq $t0, $zero, end_cond
+    #     addi $t1 $t1 1
+    
+
+
+    
 end:
     # print(register)
     li $v0, 1

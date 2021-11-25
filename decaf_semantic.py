@@ -216,9 +216,9 @@ class semantic:
             else:
                 print(f"Semantic error: {second} is not an int or boolean")
                 exit(-1)
-        elif (productions == ['!', '<expr>']):
-            first = productions[0]
-            second = self.head_expr_return(edge[1], append_next)
+        elif (productions == ['(', '!', '<expr>', ')']):
+            first = productions[1]
+            second = self.head_expr_return(edge[2], append_next)
             if second == 'int':
                 print(f"Semantic error: {first} operand cannot operate with int only with boolean.")
                 exit(-1)

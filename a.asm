@@ -1,39 +1,63 @@
 .data
-str: .asciiz "\nSuccessful"
+ 	endl: .asciiz "\n"
+
 .text
 main:
-	addi $sp $sp -12 # scope variable allocation 2
-	li $t2 10
-	li $t6 4
-	add $t2 $t2 $t6
-	li $t3 10
-	mult $t2 $t3
-	mflo $t2
-	li $t4 1
-	li $t5 3
-	sub $t4 $t4 $t5
-	mult $t2 $t4
-	mflo $t2
-	
-	# print(register)
-	li $v0, 1
-	move $a0, $t2
-	syscall
-	
-	sw $t2 0($sp)
-	li $t7 9
-	sw $t7 8($sp)
-	li $t8 6
-	lw $t1 8($sp)
-	add $t8 $t8 $t1
-	sw $t8 4($sp)
-	addi $sp $sp 12 # out of scope deallocation
+	# {'a': ['boolean', 0], 'b': ['int', 1]}
+	addi $sp $sp -5 # field_decl & methods alloc
+	# stack frame allocation
+	sw $ra 0($sp)
+	sw $s0 4($sp)
+	sw $s1 8($sp)
+	sw $s2 12($sp)
+	sw $s3 16($sp)
+	sw $s4 20($sp)
+	sw $s5 24($sp)
+	sw $s6 28($sp)
+	sw $s7 32($sp)
+	sw $fp 36($sp)
+	# {'c': ['int', 0], 'e': ['boolean', 4]}
+	addi $sp $sp -5 # var alloc
+	li $t3 1
+	sw $t3 13($sp)
+	lw $t6 13($sp)
+	li $t5 16
+	add $t6 $t6 $t5
+	li $t4 4
+	mult $t6 $t4
+	mflo $t6
+	sw $t6 14($sp)
+	addi $sp $sp 5 # out of scope deallocation
+	addi $sp $sp 40 # frame dealloc
 	j end_program
+	addi $sp $sp 45 # out of scope deallocation
+	j end_program
+MBexp:
+	addi $sp $sp -40
+	# stack frame allocation
+	sw $ra 0($sp)
+	sw $s0 4($sp)
+	sw $s1 8($sp)
+	sw $s2 12($sp)
+	sw $s3 16($sp)
+	sw $s4 20($sp)
+	sw $s5 24($sp)
+	sw $s6 28($sp)
+	sw $s7 32($sp)
+	sw $fp 36($sp)
+	# {'num': ['int', 0], 'n': ['int', 4]}
+	addi $sp $sp -8 # var alloc
+	lw $t7 0($sp)
+	lw $t2 0($sp)
+	mult $t7 $t2
+	mflo $t7
+	sw $t7 4($sp)
+	lw $t0 4($sp)
+	move $t0 $v1
+	addi $sp $sp 8 # out of scope deallocation
+	addi $sp $sp 40 # frame dealloc
+	addi $sp $sp -40
 end_program:
-	# print(str1)
-	li $v0, 4
-	la $a0, str
-	syscall 
 	# end program
 	li $v0, 10
 	syscall

@@ -612,7 +612,7 @@ class scanner:
                 if (char == '\n'):
                     self.line_num += 1
                     self.char_num = 0
-            elif char in "(){}[];,":
+            elif char in "(){}[];,!":
                 if buffer != '':
                     match_regex = self.recognize(buffer)
                     if match_regex: 
@@ -620,7 +620,7 @@ class scanner:
                     else: self.error.no_regex_match(self)
                 self.append_to_list_of_token(None, char)
                 buffer = ''
-            elif char in "!<>=+-*/%":
+            elif char in "<>=+-*/%":
                 if buffer != '':
                     match_regex = self.recognize(buffer)
                     if match_regex:
