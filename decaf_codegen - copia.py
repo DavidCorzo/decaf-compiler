@@ -24,10 +24,13 @@ def tag_gen_with_name(name:list):
 
 tags_generator = {
     '==' : tag_gen_with_name(['eq_false', 'eq_fin']),
+    '!=' : tag_gen_with_name(['neq_false', 'neq_fin']),
     '<'  : tag_gen_with_name(['lt_false', 'lt_fin']),
     '>'  : tag_gen_with_name(['gt_false', 'gt_fin']),
     '<=' : tag_gen_with_name(['lte_false', 'lte_fin']),
     '>=' : tag_gen_with_name(['bte_false', 'bte_fin']),
+    '&&' : tag_gen_with_name(['and_false', 'and_fin']),
+    '||' : tag_gen_with_name(['or_true', 'or_fin']),
 }
 
 intended_print = print
@@ -317,14 +320,14 @@ class codegen:
 
     def get_var_reg(self, var_name):
         var_attr, variable_offset = self.get_var(var_name)
-        temp_reg = occupy_temp_reg()
+        temp = occupy_temp_reg()
         if var_attr[VAR_TYPE] == 'int':
             self.assembler_sections += [
-                instruction(f'lw {temp_reg} {variable_offset}($sp)')
+                instruction(f'lw {temp} {variable_offset}($sp)')
             ]
         elif var_attr[VAR_TYPE] == 'boolean':
             self.assembler_sections += [
-                instruction(f'lb {temp_reg} {variable_offset}($sp)')
+                instruction(f'lb {temp} {variable_offset}($sp)')
             ]
         return temp_reg
 
@@ -366,38 +369,39 @@ class codegen:
             expr_children = self.ast[children[EXPR_POS]][CHILDREN]
             expr_reg = self.expr(expr_children)
             if assign_op == '%assign%':
-                if var_attr[VAR_TYPE] == 'int':
-                    self.assembler_sections[-1] += [
-                        instruction(f'sw {expr_reg} {variable_offset}($sp)')
-                    ]
-                elif var_attr[VAR_TYPE] == 'boolean':
-                    self.assembler_sections[-1] += [
-                        instruction(f'sb {expr_reg} {variable_offset}($sp)')
-                    ]
-                else:
-                    codegen_std_error(f'incompatible type %assign%')
+                load_operation = 'lw' if var_attr[VAR_TYPE] == 'int' else 'lb'
+                store_operation = 'sw' if var_attr[VAR_TYPE] == 'int' else 'sb'
+                temp = occupy_temp_reg()
+                self.assembler_sections[-1] += [
+                    instruction(f'# {assign_op} statement to {var_name}'),
+                    instruction(f'{store_operation} {expr_reg} {variable_offset}($sp) # returning {var_name}')
+                ]
+                unoccupy_temp_reg(temp)
+                unoccupy_temp_reg(expr_reg)
             elif assign_op == '%assign_inc%':
-                if var_attr[VAR_TYPE] == 'int':
-                    self.assembler_sections[-1] += [
-                        instruction(f'sw {expr_reg} {variable_offset}($sp)')
-                    ]
-                elif var_attr[VAR_TYPE] == 'boolean':
-                    self.assembler_sections[-1] += [
-                        instruction(f'sb {expr_reg} {variable_offset}($sp)')
-                    ]
-                else:
-                    codegen_std_error(f'incompatible type in %assign_inc%')
+                load_operation = 'lw' if var_attr[VAR_TYPE] == 'int' else 'lb'
+                store_operation = 'sw' if var_attr[VAR_TYPE] == 'int' else 'sb'
+                temp = occupy_temp_reg()
+                self.assembler_sections[-1] += [
+                    instruction(f'# {assign_op} statement to {var_name}'),
+                    instruction(f'{load_operation} {temp} {variable_offset}($sp) # fetching {var_name}'),
+                    instruction(f'add {temp} {temp} {expr_reg}'),
+                    instruction(f'{store_operation} {temp} {variable_offset}($sp) # returning {var_name}')
+                ]
+                unoccupy_temp_reg(temp)
+                unoccupy_temp_reg(expr_reg)
             elif assign_op == '%assign_dec%':
-                if var_attr[VAR_TYPE] == 'int':
-                    self.assembler_sections[-1] += [
-                        instruction(f'sw {expr_reg} {variable_offset}($sp)')
-                    ]
-                elif var_attr[VAR_TYPE] == 'boolean':
-                    self.assembler_sections[-1] += [
-                        instruction(f'sb {expr_reg} {variable_offset}($sp)')
-                    ]
-                else:
-                    codegen_std_error(f'incompatible type in %assign_dec%')
+                load_operation = 'lw' if var_attr[VAR_TYPE] == 'int' else 'lb'
+                store_operation = 'sw' if var_attr[VAR_TYPE] == 'int' else 'sb'
+                temp = occupy_temp_reg()
+                self.assembler_sections[-1] += [
+                    instruction(f'# {assign_op} statement to {var_name}'),
+                    instruction(f'{load_operation} {temp} {variable_offset}($sp) # fetching {var_name}'),
+                    instruction(f'sub {temp} {temp} {expr_reg}'),
+                    instruction(f'{store_operation} {temp} {variable_offset}($sp) # returning {var_name}')
+                ]
+                unoccupy_temp_reg(temp)
+                unoccupy_temp_reg(expr_reg)
             else:
                 codegen_std_error(f'assign_op {assign_op} not recognized')
         else:
@@ -431,39 +435,18 @@ class codegen:
             var_name = self.get_pseudo_terminal_value(children[VAR_POS])
             subscript_literal = self.get_subscript_val(children[SUBSCRIPT_POS])
             var_attr, variable_offset = self.get_var(var_name)
-            temp_reg = occupy_temp_reg()
+            temp = occupy_temp_reg()
             if var_attr[VAR_TYPE] == 'int':
-                self.append_instructions(self.current_method, [instruction(f'lw {temp_reg} {variable_offset}($sp) # r-value id')])
+                self.append_instructions(self.current_method, [instruction(f'lw {temp} {variable_offset}($sp) # r-value id')])
             elif var_attr[VAR_TYPE] == 'boolean':
-                self.append_instructions(self.current_method, [instruction(f'lb {temp_reg} {variable_offset}($sp) # r-value id')])
+                self.append_instructions(self.current_method, [instruction(f'lb {temp} {variable_offset}($sp) # r-value id')])
             else:
                 codegen_std_error(f'incompatible types')
-
         elif (productions == ['<literal>']):
             LITERAL_POS = 0
             literal_children = self.ast[children[LITERAL_POS]][CHILDREN]
             literal_reg = self.literal(literal_children)
             return literal_reg
-        elif (productions == ['<expr>', '<bin_op>', '<expr>']):
-            LEFT_EXPR, BIN_OP, RIGHT_EXPR = 0, 1, 2
-            left_expr_children = self.ast[children[LEFT_EXPR]][CHILDREN]
-            left_expr = self.expr(left_expr_children)
-            bin_op_ptr = self.ast[children[BIN_OP]][CHILDREN]
-            bin_op_parent = self.ast[children[BIN_OP]][PARENT]
-            right_expr_children = self.ast[children[RIGHT_EXPR]][CHILDREN]
-            right_expr = self.expr(right_expr_children)
-            print(bin_op_parent, bin_op_ptr)
-            if (bin_op_parent == '<arith_op>'):
-                inner_bin_op = None
-                print(inner_bin_op)
-            elif (bin_op_parent == '%rel_op%'):
-                symbol = self.get_pseudo_terminal_value(bin)
-            elif (bin_op_parent == '%eq_op%'):
-                pass
-            elif (bin_op_parent == '%cond_op%'):
-                pass
-            else:
-                codegen_std_error(f'production not found for bin_op_child {bin_op_parent}')
         elif (productions == ['%minus%', '<expr>']):
             MINUS_SIGN_POS, EXPR_POS = 0, 1
             expr_children = self.ast[children[EXPR_POS]][CHILDREN]
@@ -484,8 +467,13 @@ class codegen:
             expr_children = self.ast[children[EXPR_POS]][CHILDREN]
             expr_reg = self.expr(expr_children)
             return expr_reg
-        elif (productions == ['(', '<expr>', '<bin_op>', '<expr>', ')']):
-            LEFT_EXPR, BIN_OP, RIGHT_EXPR = 1, 2, 3
+        elif ((productions == ['(', '<expr>', '<bin_op>', '<expr>', ')']) or (productions == ['<expr>', '<bin_op>', '<expr>'])):
+            if (productions == ['(', '<expr>', '<bin_op>', '<expr>', ')']):
+                LEFT_EXPR, BIN_OP, RIGHT_EXPR = 1, 2, 3
+            elif (productions == ['<expr>', '<bin_op>', '<expr>']):
+                LEFT_EXPR, BIN_OP, RIGHT_EXPR = 0, 1, 2
+            else:
+                codegen_std_error(f'error in <expr> <bin_op> <expr>')
             left_expr_children = self.ast[children[LEFT_EXPR]][CHILDREN]
             left_expr = self.expr(left_expr_children)
             bin_op_parent = self.ast[self.ast[children[BIN_OP]][PTR][0]][PARENT]
@@ -496,32 +484,42 @@ class codegen:
                 symbol = self.get_pseudo_terminal_value(self.ast[bin_op_ptr][PTR][0])
                 if (symbol == '+'):
                     self.append_instructions(self.current_method, [
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
                         instruction(f'add {left_expr} {left_expr} {right_expr}')
                     ])
                     unoccupy_temp_reg(right_expr)
+                    return left_expr
                 elif (symbol == '-'):
                     self.append_instructions(self.current_method, [
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
                         instruction(f'sub {left_expr} {left_expr} {right_expr}')
                     ])
                     unoccupy_temp_reg(right_expr)
+                    return left_expr
                 elif (symbol == '*'):
                     self.append_instructions(self.current_method, [
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
                         instruction(f'mult {left_expr} {right_expr}'),
                         instruction(f'mflo {left_expr}')
                     ])
                     unoccupy_temp_reg(right_expr)
+                    return left_expr
                 elif (symbol == '/'):
                     self.append_instructions(self.current_method, [
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
                         instruction(f'div {left_expr} {right_expr}'),
                         instruction(f'mflo {left_expr}')
                     ])
                     unoccupy_temp_reg(right_expr)
+                    return left_expr
                 elif (symbol == '%'):
                     self.append_instructions(self.current_method, [
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
                         instruction(f'div {left_expr} {right_expr}'),
                         instruction(f'mfhi {left_expr}')
                     ])
                     unoccupy_temp_reg(right_expr)
+                    return left_expr
                 else:
                     codegen_std_error(f'no symbol found in <expr>::<arith_op> {symbol}')
             elif (bin_op_parent == '%rel_op%'):
@@ -529,7 +527,7 @@ class codegen:
                 if (symbol == '<'):
                     lt_false, lt_fin = next(tags_generator[symbol])
                     self.append_instructions(self.current_method, [
-                        instruction(f'# {left_expr} < {right_expr} ?'),
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
                         instruction(f'bgt {left_expr} {right_expr} {lt_false}'),
                         instruction(f'beq {left_expr} {right_expr} {lt_false}'),
                         instruction(f'li {left_expr} 1', tabs=2),
@@ -539,10 +537,12 @@ class codegen:
                         instruction(f'j {lt_fin}', tabs=2),
                         instruction(f'{lt_fin}')
                     ])
+                    unoccupy_temp_reg(right_expr)
+                    return left_expr
                 elif (symbol == '>'):
                     gt_false, gt_fin = next(tags_generator[symbol])
                     self.append_instructions(self.current_method, [
-                        instruction(f'# {left_expr} > {right_expr} ?'),
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
                         instruction(f'blt {left_expr} {right_expr} {gt_false}'),
                         instruction(f'beq {left_expr} {right_expr} {gt_false}'),
                         instruction(f'li {left_expr} 1', tabs=2),
@@ -552,35 +552,35 @@ class codegen:
                         instruction(f'j {gt_fin}', tabs=2),
                         instruction(f'{gt_fin}')
                     ])
+                    unoccupy_temp_reg(right_expr)
                 elif (symbol == '<='):
-                    # bgt $t0 $t1 false
-                    #     li $t0 1
-                    #     j fin
-                    # false:
-                    #     li $t1 0
-                    #     j fin
-                    # fin:
-                    lte_false, lte_fin = next(tags_generator[symbol])
+                    lte_false_tag, lte_fin_tag = next(tags_generator[symbol])
                     self.append_instructions(self.current_method, [
-                        instruction(f'bgt {left_expr} {right_expr} {lte_false}'),
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
+                        instruction(f'bgt {left_expr} {right_expr} {lte_false_tag}'),
                         instruction(f'li {left_expr} 1', tabs=2),
-                        instruction(f'j {lte_fin}', tabs=2),
-                        instruction(f'{lte_false}:'),
+                        instruction(f'j {lte_fin_tag}', tabs=2),
+                        instruction(f'{lte_false_tag}:'),
                         instruction(f'li {left_expr} 0', tabs=2),
-                        instruction(f'j {lte_fin}', tabs=2),
-                        instruction(f'{lte_fin}:')
+                        instruction(f'j {lte_fin_tag}', tabs=2),
+                        instruction(f'{lte_fin_tag}:')
                     ])
+                    unoccupy_temp_reg(right_expr)
+                    return left_expr
                 elif (symbol == '>='):
-                    bte_false, bte_fin = next(tags_generator[symbol])
+                    bte_false_tag, bte_fin_tag = next(tags_generator[symbol])
                     self.append_instructions(self.current_method, [
-                        instruction(f'blt {left_expr} {right_expr} {bte_false}'),
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
+                        instruction(f'blt {left_expr} {right_expr} {bte_false_tag}'),
                         instruction(f'li {left_expr} 1', tabs=2),
-                        instruction(f'j {bte_fin}', tabs=2),
-                        instruction(f'{bte_false}:'),
+                        instruction(f'j {bte_fin_tag}', tabs=2),
+                        instruction(f'{bte_false_tag}:'),
                         instruction(f'li {left_expr} 0', tabs=2),
-                        instruction(f'j {bte_fin}', tabs=2),
-                        instruction(f'{bte_fin}:')
+                        instruction(f'j {bte_fin_tag}', tabs=2),
+                        instruction(f'{bte_fin_tag}:')
                     ])
+                    unoccupy_temp_reg(right_expr)
+                    return left_expr
                 else:
                     codegen_std_error(f'no symbol found in <expr>::%rel_op$ {symbol}')
             elif (bin_op_parent == '%eq_op%'):
@@ -588,7 +588,7 @@ class codegen:
                 if (symbol == '=='):
                     eq_false_tag, eq_fin_tag = next(tags_generator[symbol])
                     self.append_instructions(self.current_method, [
-                        instruction(f'# {left_expr} == {right_expr} ?'),
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
                         instruction(f'bne {left_expr} {right_expr} {eq_false_tag}'),
                         instruction(f'li {left_expr} 1', tabs=2),
                         instruction(f'j {eq_fin_tag}', tabs=2),
@@ -598,15 +598,58 @@ class codegen:
                         instruction(f'{eq_fin_tag}:')
                     ])
                     unoccupy_temp_reg(right_expr)
+                    return left_expr
                 elif (symbol == '!='):
+                    neq_false_tag, neq_fin_tag = next(tags_generator[symbol])
                     self.append_instructions(self.current_method, [
-                        
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
+                        instruction(f'beq {left_expr} {right_expr} {neq_false_tag}'),
+                        instruction(f'li {left_expr} 1', tabs=2),
+                        instruction(f'j {neq_fin_tag}', tabs=2),
+                        instruction(f'{neq_false_tag}:'),
+                        instruction(f'li {left_expr} 0', tabs=2),
+                        instruction(f'j {neq_fin_tag}', tabs=2),
+                        instruction(f'{neq_fin_tag}:')
                     ])
+                    unoccupy_temp_reg(right_expr)
+                    return left_expr
                 else:
-                    codegen_std_error(f'no symbol found in <expr>::%rel_op$ {symbol}')
+                    codegen_std_error(f'no symbol found in <expr>::%rel_op% {symbol}')
             elif (bin_op_parent == '%cond_op%'):
                 symbol = self.get_pseudo_terminal_value(bin_op_ptr)
-                
+                if (symbol == '&&'):
+                    and_false_tag, and_fin_tag = next(tags_generator[symbol])
+                    self.append_instructions(self.current_method, [
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
+                        instruction(f'beq {left_expr} $zero {and_false_tag}'),
+                        instruction(f'beq {right_expr} $zero {and_false_tag}'),
+                        instruction(f'li {left_expr} 1', tabs=2),
+                        instruction(f'j {and_fin_tag}', tabs=2),
+                        instruction(f'{and_false_tag}'),
+                        instruction(f'li {left_expr} 0', tabs=2),
+                        instruction(f'j {and_fin_tag}', tabs=2),
+                        instruction(f'{and_fin_tag}:')
+
+                    ])
+                    unoccupy_temp_reg(right_expr)
+                    return left_expr
+                if (symbol == '||'):
+                    or_true_tag, or_fin_tag = next(tags_generator[symbol])
+                    self.append_instructions(self.current_method, [
+                        instruction(f'# {left_expr} {symbol} {right_expr} ?'),
+                        instruction(f'bne {left_expr} $zero {or_true_tag}'),
+                        instruction(f'bne {right_expr} $zero {or_true_tag}'),
+                        instruction(f'li {left_expr} 0', tabs=2),
+                        instruction(f'j {or_fin_tag}', tabs=2),
+                        instruction(f'{or_true_tag}:'),
+                        instruction(f'li {left_expr} 1', tabs=2),
+                        instruction(f'j {or_fin_tag}', tabs=2),
+                        instruction(f'{or_fin_tag}:')
+                    ])
+                    unoccupy_temp_reg(right_expr)
+                    return left_expr
+                else:
+                    codegen_std_error(f'no symbol found in <expr>::%cond_op% {symbol}')
             else:
                 codegen_std_error(f'production not found for bin_op_child {bin_op_parent}')
         else:
@@ -629,11 +672,11 @@ class codegen:
             value = bool_dict[self.get_pseudo_terminal_value(children[BOOL_LITERAL_POS])]
         else:
             codegen_std_error(f'production {productions} was not recognized in literal')
-        temp_reg = occupy_temp_reg()
+        temp = occupy_temp_reg()
         self.assembler_sections[-1] += [
-            instruction(f'li {temp_reg} {value}')
+            instruction(f'li {temp} {value}')
         ]
-        return temp_reg
+        return temp
         
     def callee_header(self, main=False):
         instructions = [

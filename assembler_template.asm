@@ -1,12 +1,13 @@
 .text 
 main:
-    li $t0 3
-    li $t1 4
-
-    bgt $t0 $t1 false
-        li $t0 1
+    # and
+    li $t0 0
+    li $t1 1
+    bne $t0 $zero true
+    bne $t1 $zero true
+        li $t0 0
         j fin
-    false:
-        li $t1 0
+    true:
+        li $t0 1
         j fin
     fin:
