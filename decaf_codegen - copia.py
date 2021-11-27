@@ -10,6 +10,7 @@ from decaf_semantic import PRODUCTION_DETECTED, semantic
 mem_space = {'int':4, 'boolean': 1, 'class': 0, 'void': 0}
 VAR_TYPE, IS_ALLOCATED, SP_OFFSET, IS_ARGUMENT = 0, 1, 2, 3
 
+CALLEE_BEGINING, CALLEE_ENDING = 0, 1
 CALLEE_OFFSET = 40
 MAIN_TAG = 'main'
 FINISH_TAG = 'fin'
@@ -84,14 +85,15 @@ class codegen:
         """IF THE FUNCTION TAKES IN NO ARGUMENTS THEN IT WILL NOT APPEAR IN THE METHOD_ARGUMENTS DICTIONARY """
         self.method_arguments           = dict()
         self.method_return_types        = dict()
+        self.callee_actions_performed   = dict()
         self.scope_index                = 0
         self.stack_ptr                  = 0
         self.var_type                   = None
-        self.current_method             = None
+        self.current_method             = 'main'
         self.method_offset              = 0
-        self.scope_offset               = 0
+        self.field_decl_offset          = 0
+        self.var_decl_offset            = 0
         self.initiate()
-        self.write_executable()
     
     def append_instructions(self, current_method, instructions):
         if (current_method == 'main'):
@@ -101,6 +103,7 @@ class codegen:
     
     def write_executable(self):
         with open(self.executable_filename, mode='w+') as file:
+            file.truncate(0)
             file.writelines(DOT_DATA)
             file.writelines(self.main_section)
             for section in self.assembler_sections:
@@ -135,10 +138,10 @@ class codegen:
         self.scope_stack.append({})
         self.scope_index = 0
         self.main_section += [instruction(f'{MAIN_TAG}:', 0)]
-        self.callee_header(main=True)
+        self.callee_header_main()
         self.assembler_sections.append([])
         self.traverse([self.ast_head])
-        self.callee_ender(main=True)
+        self.callee_ender_main()
         self.write_executable()
 
     def traverse(self, list_node_i):
@@ -186,7 +189,7 @@ class codegen:
             # '{'
             self.opening_curly()
             # '<var_decl*>'
-            self.scope_offset = 0 # to define the scope
+            self.var_decl_offset = 0 # to define the scope
             var_decl_kleene_children = self.ast[children[VAR_DECL_KLEENE_POS]][CHILDREN]
             self.var_decl_kleene(var_decl_kleene_children)
             # '<statement*>'
@@ -218,8 +221,8 @@ class codegen:
             VAR_TYPE_POS, ID_POS, ARGS_LIST_POS = 0, 1, 2
             self.var_type = self.get_pseudo_terminal_value(children[VAR_TYPE_POS])
             var_name = self.get_pseudo_terminal_value(children[ID_POS])
-            self.add_var_to_scope(var_name, self.var_type, has_been_allocated=False, stack_pointer_offset=self.scope_offset, is_argument=False)
-            self.scope_offset += mem_space[self.var_type] # increment the offset
+            self.add_var_to_scope(var_name, self.var_type, has_been_allocated=False, stack_pointer_offset=self.var_decl_offset, is_argument=False)
+            self.var_decl_offset += abs(mem_space[self.var_type]) # increment the offset
             args_list_children = self.ast[children[ARGS_LIST_POS]][CHILDREN]
             self.args_list(args_list_children)
         else:
@@ -259,7 +262,9 @@ class codegen:
             assignment_statement_children = self.ast[children[ASSIGNMENT_STATEMENT_POS]][CHILDREN]
             self.assignment_statement(assignment_statement_children)
         elif (productions == ['<method_call>', ';']):
-            pass
+            METHOD_CALL_POS = 0
+            method_call_children = self.ast[children[METHOD_CALL_POS]][CHILDREN]
+            self.method_call(method_call_children)
         elif (productions == ['if', '<expr>', '<block>', '<else_block>']):
             IF_POS, EXPR_POS, BLOCK_POS, ELSE_BLOCK_POS = 0, 1, 2, 3
             # 'if'
@@ -279,22 +284,25 @@ class codegen:
             pass
             # '<for_eval>'
             for_eval_children = self.ast[children[FOR_EVAL_POS]][CHILDREN]
-            # self.for_eval_children(for_eval_children)
+            # self.for_eval(for_eval_children)
             # '<block>'
             block_children = self.ast[children[BLOCK_POS]][CHILDREN]
             self.block(block_children)
         elif (productions == ['return', ';']):
             # 'return'
-            
+            self.callee_ender()
             # ';'
             pass
         elif (productions == ['return', '<expr>', ';']):
             EXPR_POS = 1
             # 'return'
-
             # '<expr>'
             expr_children = self.ast[children[EXPR_POS]][CHILDREN]
             expr_reg = self.expr(expr_children)
+            self.append_instructions(self.current_method, [
+                instruction(f'move {expr_reg} $v0 # return expr')
+            ])
+            self.callee_ender()
             # ';'
             pass
         elif (productions == ['break', ';']):
@@ -317,6 +325,36 @@ class codegen:
             self.print_var(print_var_children)
         else:
             codegen_std_error(f'statement not recognized {productions}')
+
+    def method_call(self, children):
+        """CANNOT BE NULL"""
+        if children == None: codegen_std_error(f'method_call_children cannot be null in method_call')
+        productions = [self.ast[x][PARENT] for x in children]
+        if (productions == ['%id%', '(', ')']):
+            ID_POS = 0
+            # allocate the arguments
+            method_name = method_name_gen(self.get_pseudo_terminal_value(children[ID_POS]))
+            print(self.method_arguments[method_name], method_name, '@@@@@@@')
+            self.append_instructions(self.current_method, [
+                
+            ])
+        elif (productions == ['%id%', '(', '<comma_expr>', ')']):
+            ID_POS, COMMA_EXPR = 0, 2
+            # allocate the arguments
+            method_name = self.get_pseudo_terminal_value(children[ID_POS])
+            method_name = method_name_gen(self.get_pseudo_terminal_value(children[ID_POS]))
+            print(self.method_arguments[method_name], method_name, '@@@@@@@')
+            self.append_instructions(self.current_method, [
+                
+            ])
+        elif (productions == ['callout', '(', '%string_literal%',  ')']):
+            # no se que es esto
+            pass
+        elif (productions == ['callout', '(', '%string_literal%', ',', '<callout_arg">', ')']):
+            # no se que es esto
+            pass
+        else:
+            codegen_std_error(f'did not find production like {productions} in method_call')
 
     def get_var_reg(self, var_name):
         var_attr, variable_offset = self.get_var(var_name)
@@ -378,6 +416,7 @@ class codegen:
                 ]
                 unoccupy_temp_reg(temp)
                 unoccupy_temp_reg(expr_reg)
+
             elif assign_op == '%assign_inc%':
                 load_operation = 'lw' if var_attr[VAR_TYPE] == 'int' else 'lb'
                 store_operation = 'sw' if var_attr[VAR_TYPE] == 'int' else 'sb'
@@ -436,12 +475,9 @@ class codegen:
             subscript_literal = self.get_subscript_val(children[SUBSCRIPT_POS])
             var_attr, variable_offset = self.get_var(var_name)
             temp = occupy_temp_reg()
-            if var_attr[VAR_TYPE] == 'int':
-                self.append_instructions(self.current_method, [instruction(f'lw {temp} {variable_offset}($sp) # r-value id')])
-            elif var_attr[VAR_TYPE] == 'boolean':
-                self.append_instructions(self.current_method, [instruction(f'lb {temp} {variable_offset}($sp) # r-value id')])
-            else:
-                codegen_std_error(f'incompatible types')
+            load_operation = 'lw' if var_attr[VAR_TYPE] == 'int' else 'lb'
+            self.append_instructions(self.current_method, [instruction(f'{load_operation} {temp} {variable_offset}($sp) # <expr>::id {var_name} r-value id')])
+            return temp
         elif (productions == ['<literal>']):
             LITERAL_POS = 0
             literal_children = self.ast[children[LITERAL_POS]][CHILDREN]
@@ -454,6 +490,7 @@ class codegen:
             self.append_instructions(self.current_method, [
                 instruction(f'sub {expr_reg} $zero {expr_reg} # - <expr>')
             ])
+            return expr_reg
         elif (productions == ['(', '!', '<expr>', ')']):
             INTERROGATION_SIGN_POS, EXPR_POS = 1, 2
             expr_children = self.ast[children[EXPR_POS]][CHILDREN]
@@ -535,7 +572,7 @@ class codegen:
                         instruction(f'{lt_false}:'),
                         instruction(f'li {left_expr} 0', tabs=2),
                         instruction(f'j {lt_fin}', tabs=2),
-                        instruction(f'{lt_fin}')
+                        instruction(f'{lt_fin}:')
                     ])
                     unoccupy_temp_reg(right_expr)
                     return left_expr
@@ -550,9 +587,10 @@ class codegen:
                         instruction(f'{gt_false}:'),
                         instruction(f'li {left_expr} 0', tabs=2),
                         instruction(f'j {gt_fin}', tabs=2),
-                        instruction(f'{gt_fin}')
+                        instruction(f'{gt_fin}:')
                     ])
                     unoccupy_temp_reg(right_expr)
+                    return left_expr
                 elif (symbol == '<='):
                     lte_false_tag, lte_fin_tag = next(tags_generator[symbol])
                     self.append_instructions(self.current_method, [
@@ -678,7 +716,15 @@ class codegen:
         ]
         return temp
         
-    def callee_header(self, main=False):
+    def callee_header(self):
+        if (self.current_method == None):
+            codegen_std_error(f'current_method is {self.current_method} in callee_h.')
+        elif (self.current_method == 'main'):
+            self.callee_header_main()
+            return
+        if self.callee_actions_performed.get(self.current_method):
+            if self.callee_actions_performed[self.current_method][CALLEE_BEGINING]:
+                return
         instructions = [
             instruction(f'addi $sp $sp -{CALLEE_OFFSET}'), # -40 it is
             instruction(f'move $sp $fp')    , # copy $sp to $fp
@@ -693,13 +739,70 @@ class codegen:
             instruction(f'sw $s6 32($sp)')  , # saving $s6 to stack
             instruction(f'sw $s7 36($sp)')  , # saving $s7 to stack
         ]
-        if main:
-            self.main_section += instructions
-        else:
-            self.assembler_sections[-1] += instructions
+        self.assembler_sections[-1] += instructions
+        self.callee_actions_performed[self.current_method] = [False]*2
+        self.callee_actions_performed[self.current_method][CALLEE_BEGINING] = True
     
-    def callee_ender(self, main=False):
+    def callee_header_main(self):
+        if (self.current_method == None) or (self.current_method != 'main'):
+            codegen_std_error(f'current_method is {self.current_method} in calle_h_main.')
+        if self.callee_actions_performed.get(self.current_method):
+            if self.callee_actions_performed[self.current_method][CALLEE_BEGINING]:
+                return
+        instructions = [
+            instruction(f'addi $sp $sp -{CALLEE_OFFSET}'), # -40 it is
+            instruction(f'move $sp $fp')    , # copy $sp to $fp
+            instruction(f'sw $fp 0($sp)')   , # push $fp to stack
+            instruction(f'sw $ra 4($sp)')   , # push $ra to stack
+            instruction(f'sw $s0 8($sp)')   , # saving $s0 to stack
+            instruction(f'sw $s1 12($sp)')  , # saving $s1 to stack
+            instruction(f'sw $s2 16($sp)')  , # saving $s2 to stack
+            instruction(f'sw $s3 20($sp)')  , # saving $s3 to stack
+            instruction(f'sw $s4 24($sp)')  , # saving $s4 to stack
+            instruction(f'sw $s5 28($sp)')  , # saving $s5 to stack
+            instruction(f'sw $s6 32($sp)')  , # saving $s6 to stack
+            instruction(f'sw $s7 36($sp)')  , # saving $s7 to stack
+        ]
+        self.main_section += instructions
+        self.callee_actions_performed['main'] = [False]*2
+        self.callee_actions_performed['main'][CALLEE_BEGINING] = True
+    
+    def callee_ender_main(self):
+        if (self.current_method == None) or (self.current_method != 'main'):
+            codegen_std_error(f'current_method is {self.current_method} in calle_e_main.')
+        if self.callee_actions_performed.get(self.current_method):
+            if self.callee_actions_performed[self.current_method][CALLEE_ENDING]:
+                return
+        instructions = [
+            # deallocate field_decl
+            instruction(f'addi $sp $sp {self.field_decl_offset} # field_decl dealloc'),
+            # return has already been assigned to $v0
+            instruction(f'lw $fp 0($sp)') , # recover $fp
+            instruction(f'sw $ra 4($sp)') , # recover $ra
+            instruction(f'sw $s0 8($sp)') , # recover $s0
+            instruction(f'sw $s1 12($sp)'), # recover $s1
+            instruction(f'sw $s2 16($sp)'), # recover $s2
+            instruction(f'sw $s3 20($sp)'), # recover $s3
+            instruction(f'sw $s4 24($sp)'), # recover $s4
+            instruction(f'sw $s5 28($sp)'), # recover $s5
+            instruction(f'sw $s6 32($sp)'), # recover $s6
+            instruction(f'sw $s7 36($sp)'), # recover $s7
+            instruction(f'move $fp $sp')  , # restore $sp this is the dealloc
+            instruction(f'jr $ra')
+        ]
+        self.main_section += instructions
+        self.callee_actions_performed['main'][CALLEE_ENDING] = True
+    
+    def callee_ender(self):
         """By now the local variables should have already been deallocated"""
+        if (self.current_method == None):
+            codegen_std_error(f'current_method is {self.current_method} in callee_h.')
+        elif (self.current_method == 'main'):
+            self.callee_ender_main()
+            return
+        if self.callee_actions_performed.get(self.current_method):
+            if self.callee_actions_performed[self.current_method][CALLEE_ENDING]:
+                return
         instructions = [
             # return has already been assigned to $v0
             instruction(f'lw $fp 0($sp)') , # recover $fp
@@ -715,10 +818,8 @@ class codegen:
             instruction(f'move $fp $sp')  , # restore $sp this is the dealloc
             instruction(f'jr $ra')
         ]
-        if main:
-            self.main_section += instructions
-        else:
-            self.assembler_sections[-1] += instructions
+        self.assembler_sections[-1] += instructions
+        self.callee_actions_performed[self.current_method][CALLEE_ENDING] = True
 
     def method_decl_handler(self, parent_ptr):
         children = self.ast[parent_ptr][PTR]
@@ -735,6 +836,9 @@ class codegen:
                 self.current_method = method_name
                 if method_name != 'main':
                     self.assembler_sections.append(list())
+                    self.append_instructions(self.current_method, [
+                        instruction(f'{self.current_method}: # method tag', tabs=0)
+                    ])
                 # '<type|void>'
                 self.method_return_types[method_name] = self.type_or_void(children[TYPE_OR_VOID_POS])
                 # '(', '<method_args>', ')'
@@ -812,7 +916,8 @@ class codegen:
                 VAR_TYPE_POS, ID_POS, METHOD_ARGS_DASH_POS = 1, 2, 3
                 self.var_type = self.get_pseudo_terminal_value(children[VAR_TYPE_POS])
                 arg_name = self.get_pseudo_terminal_value(children[ID_POS])
-                self.method_arguments_appender(method_name, arg_name, self.var_type, has_been_allocated=False, stack_pointer_offset=None)
+                self.method_arguments_appender(method_name, arg_name, self.var_type, has_been_allocated=False, stack_pointer_offset=self.method_offset)
+                self.method_offset += abs(mem_space[self.var_type])
                 method_args_dash_children = self.ast[children[METHOD_ARGS_DASH_POS]][CHILDREN]
                 self.method_args_dash(method_args_dash_children, method_name)
             else:
@@ -826,13 +931,16 @@ class codegen:
     def opening_curly(self):
         """NO ASSEMBLER OUTPUT UNTIL VARIABLE DECLARATION OR FIELD DECLARATION"""
         self.scope_stack.append({})
+        self.callee_header()
 
     def closing_curly(self):
         self.scope_stack.pop()
+        self.callee_ender()
     
     def field_decl_handler(self, field_decl_ptr):
         """ Finds the children first and then allocates space for all fields """
         children = self.ast[field_decl_ptr][PTR]
+        self.field_decl_offset = 0 # reseting field_decl just a formality
         self.field_decl_kleene(children)
         """ALLOCATE THE SPACE FOR THIS SCOPE, ACCESS THE SCOPE_SPACE"""
         self.main_section += [
@@ -877,12 +985,14 @@ class codegen:
             ID_POS, SUBSCRIPT_POS = 0, 1
             var_name = self.get_pseudo_terminal_value(children[ID_POS])
             subscript_val = self.get_subscript_val(children[SUBSCRIPT_POS])
-            self.add_var_to_scope(var_name, self.var_type, has_been_allocated=False, stack_pointer_offset=None, is_argument=False) # adding var to scope
+            self.add_var_to_scope(var_name, self.var_type, has_been_allocated=False, stack_pointer_offset=self.field_decl_offset, is_argument=False) # adding var to scope
+            self.field_decl_offset += abs(mem_space[self.var_type])
         elif (productions == ['%id%', '<subscript>', '<var_array_list>', ';']):
             ID_POS, SUBSCRIPT_POS, VAR_ARRAY_LIST_POS = 0, 1, 2
             var_name = self.get_pseudo_terminal_value(children[ID_POS])
             subscript_val = self.get_subscript_val(children[SUBSCRIPT_POS])
-            self.add_var_to_scope(var_name, self.var_type, has_been_allocated=False, stack_pointer_offset=None, is_argument=False) # adding var to scope
+            self.add_var_to_scope(var_name, self.var_type, has_been_allocated=False, stack_pointer_offset=self.field_decl_offset, is_argument=False) # adding var to scope
+            self.field_decl_offset += abs(mem_space[self.var_type])
             self.var_array_list(self.ast[children[VAR_ARRAY_LIST_POS]][CHILDREN])
         else:
             codegen_std_error(f'field_decl did not find template like {productions}')
@@ -895,7 +1005,8 @@ class codegen:
                 ID_POS, SUBSCRIPT_POS, VAR_ARRAY_LIST_POS = 1, 2, 3
                 var_name = self.get_pseudo_terminal_value(children[ID_POS])
                 subscript_val = self.get_subscript_val(children[SUBSCRIPT_POS])
-                self.add_var_to_scope(var_name, self.var_type, has_been_allocated=False, stack_pointer_offset=None, is_argument=False)
+                self.add_var_to_scope(var_name, self.var_type, has_been_allocated=False, stack_pointer_offset=self.var_decl_offset, is_argument=False)
+                self.var_decl_offset += abs(mem_space[self.var_type])
                 self.var_array_list(self.ast[children[VAR_ARRAY_LIST_POS]][CHILDREN])
             else:
                 codegen_std_error(f'var_array_list did not find production like {productions}')
