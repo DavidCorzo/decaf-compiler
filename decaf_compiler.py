@@ -1,8 +1,8 @@
 from decaf_cli import decaf_cli
-from decaf_scanner import scanner
-from decaf_parser import lr_0, lr_0_t, parser
-from decaf_semantic import semantic
-from decaf_codegen import codegen
+from decaf_scanner.decaf_scanner import scanner
+from decaf_parser.decaf_parser import lr_0, lr_0_t, parser
+from decaf_semantic.decaf_semantic import semantic
+from decaf_codegen.decaf_codegen import codegen
 
 RENAME_EXECUTABLE, TARGET_STAGE, DEBUG, SOURCE_CODE = 'o', 'target', 'debug', 'source_code'
 STAGES = {'scanner':1, 'parser':2, 'semantic':3, 'codegen':4, None: 4}
@@ -43,5 +43,5 @@ if __name__ == '__main__':
         target_index += 1
     if target_index != target:
         codegen_instance = codegen(semantic_instance, executable_name)
-        # if debug:
-        #     codegen_instance.debug()
+        if debug:
+            codegen_instance.debug()

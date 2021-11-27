@@ -1,17 +1,23 @@
 class Program {
     boolean a;
     int b;
+    int y1[1];
 
-    def int exp(int num) {
+    def int exp(int num, boolean r, int y) {
         int n;
+        1;
         n = (num*num);
+        n = (num > num);
         return n;
     }
 
+    def void y(int j, int k, boolean g) {}
+    def void j() {}
     def void main() {
         int c;
         boolean e;
         a = true;
+        exp(6);
         b = ((a + 16)*4);
     }
 }

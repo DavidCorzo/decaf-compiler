@@ -20,7 +20,7 @@
   - [',', '%id%', '<subscript>', '<var_array_list>']
   - [null]
 <subscript>:
-  - ['[', '<expr>', ']']
+  - ['[', '%int_literal%', ']']
   - [null]
 ###############
 # <method_decl*>
@@ -29,7 +29,7 @@
   - ['def', '<type|void>', '%id%', '(', '<method_args>', ')', '<block>', '<method_decl*_aux>']
   - ['def', '<type|void>', '%id%', '(', ')', '<block>', '<method_decl*_aux>']
 <method_decl*_aux>:
-  - ['<method_decl*>', <method_decl*_aux>]
+  - ['<method_decl*>', '<method_decl*_aux>']
   - [null]
 <type|void>:
   - ['%type%']

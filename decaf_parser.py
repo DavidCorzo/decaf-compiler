@@ -37,7 +37,7 @@ def printable(token):
 LHS, RHS = 0, 1
 class lr_0:
     def __init__(self, start_production, productions_filename, build=False, save=False):
-        self.lr_0_filename                      = 'lr_0_dfa.pickle'
+        self.lr_0_filename                      = f'{productions_filename}.pickle'
         self.start_production                   = start_production
         self.grammar_rules                      = None
         self.items                              = None
@@ -58,7 +58,7 @@ class lr_0:
             # attributes
             self.closed_rules                   = None
             self.closed_indexes                 = None
-            self.productions_filename           = productions_filename
+            self.productions_filename           = f'{productions_filename}.yaml'
             self.closure_table                  = dict()
             self.closures_to_states             = dict()
             self.closure_of_current_item        = None
@@ -371,7 +371,7 @@ class lr_0:
     def save_lr_0_dfa(self):
         with open(self.lr_0_filename, mode='wb') as file:
             to_save = self.__dict__
-            to_save.pop('state_label_gen')
+            to_save.pop('state_label_gen', None)
             pickle.dump(to_save, file)
             file.close()
     

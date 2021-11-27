@@ -1,47 +1,8 @@
 from yaml import parse
 from decaf_scanner import scanner
-from decaf_parser import lr_0, lr_0_t, parser, is_nonterminal, is_pseudo_terminal, PARENT, PTR, CHILDREN, print_dict
+from decaf_parser import lr_0, lr_0_t, parser, is_nonterminal, is_pseudo_terminal, PARENT, PTR, CHILDREN
 from decaf_semantic import semantic
 
-DOT_DATA = '\tendl: .asciiz "\\n"\n\n'
-
-mem_space = {'int':4, 'boolean': 1, 'class': 0, 'void': 0}
-VAR_TYPE, SP_POS = 0, 1
-METHOD_PREFIX, METHOD_POSTFIX = 'MB', 'ME'
-FINISH_TAG, MAIN = 'finish:', 0
-BEGIN_PROGRAM_MAIN = [f'.data\n {DOT_DATA}', '.text\n']
-ENDING_TAG = 'end_program'
-END_PROGRAM_MAIN = [f'\tj {ENDING_TAG}\n']
-END_PROGRAM_TAG = [f'{ENDING_TAG}:\n', '\t# end program\n', '\tli $v0, 10\n', '\tsyscall\n']
-
-OCCUPIED, VACANT = 'OCCUPIED', 'VACANT'
-temp_reg = {
-    VACANT: {'$t0', '$t1', '$t2', '$t3', '$t4', '$t5', '$t6', '$t7'}, # , '$t8', '$t9'
-    OCCUPIED: set()
-}
-
-def tag_gen_with_name(beg_name, end_name=None):
-    i = 0
-    while True:
-        if end_name:
-            yield (f'beg_{beg_name}_{i}', f'end_{end_name}_{i}')
-        else:
-            yield (f'beg_{beg_name}_{i}', f'end_{beg_name}_{i}')
-        i += 1
-
-IF_COND_TAG_GEN, ELSE_COND_TAG_GEN, FOR_LOOP_TAG_GEN, LESS_THAN_OR_EQUAL_TAG_GEN, GREATER_THAN_OR_EQUAL_TAG_GEN, EQUAL_TAG_GEN, NOT_EQUAL_TAG_GEN, AND_TAG_GEN, OR_TAG_GEN = 'if', 'else_or_end_if', 'for', 'less_than', 'greater_than', 'equal', 'not_equal', 'and', 'or'
-tags_generator = {
-    IF_COND_TAG_GEN                 : tag_gen_with_name(IF_COND_TAG_GEN, ELSE_COND_TAG_GEN),
-    FOR_LOOP_TAG_GEN                : tag_gen_with_name(FOR_LOOP_TAG_GEN),
-    LESS_THAN_OR_EQUAL_TAG_GEN      : tag_gen_with_name(LESS_THAN_OR_EQUAL_TAG_GEN),
-    GREATER_THAN_OR_EQUAL_TAG_GEN   : tag_gen_with_name(GREATER_THAN_OR_EQUAL_TAG_GEN),
-    EQUAL_TAG_GEN                   : tag_gen_with_name(EQUAL_TAG_GEN),
-    NOT_EQUAL_TAG_GEN               : tag_gen_with_name(NOT_EQUAL_TAG_GEN),
-    AND_TAG_GEN                     : tag_gen_with_name(AND_TAG_GEN), 
-    OR_TAG_GEN                      : tag_gen_with_name(OR_TAG_GEN)
-}
-
-print_debug = print
 
 class codegen:
     def __init__(self, assembled_semantic:semantic, executable_filename='a.asm'):
