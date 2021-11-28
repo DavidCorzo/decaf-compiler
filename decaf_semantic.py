@@ -24,8 +24,10 @@ class semantic:
         self.exprs                      = dict()
         self.unique_variables_and_scope_access()
     
-    def debug(self, semantic_debug_file='semantic_debug.txt'):
-        intended_print("PASSED SEMANTIC CHECK")
+    def debug(self, semantic_debug_file='./decaf_debug/semantic_debug.txt'):
+        STAGE = 'SEMANTIC'
+        intended_print(f'{"-"*10}PASSED {STAGE} STAGE{"-"*10}')
+        intended_print(f'\tSEMANTIC RESULTS IN: {semantic_debug_file}')
         with open(semantic_debug_file, mode='w+') as file:
             file.write(f'EXPRESSION RETURNS: \n{self.exprs}')
             file.close()

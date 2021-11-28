@@ -37,7 +37,7 @@ def printable(token):
 intended_print = print
 intended_exit = exit
 
-def parser_std_error(self, str):
+def parser_std_error(str):
     intended_print(f'Parsing error: {str}.')
     intended_print(f'In method {sys._getframe(1).f_code.co_name}.')
     intended_exit(-1)
@@ -500,10 +500,11 @@ class parser:
         self.tree_repr          = str()
         self.parse()
     
-    def debug(self, tree_file='tree_debug.txt'):
-        print(f'{"-"*10}PASSED PARSING STAGE{"-"*10}')
-        print(f'TREE: in {tree_file}')
-        with open('tree_debug.txt', mode='w+') as file:
+    def debug(self, parser_debug_file='./decaf_debug/parser_debug.txt'):
+        STAGE = 'PARSING'
+        intended_print(f'{"-"*10}PASSED {STAGE} STAGE{"-"*10}')
+        intended_print(f'\tAST IN: {parser_debug_file}')
+        with open(parser_debug_file, mode='w+') as file:
             file.write(str(self))
             file.close()
     
@@ -517,10 +518,8 @@ class parser:
     def str_tree(self, list_node_i, tab=0, f=True):
         for node_index in list_node_i:
             prod, edge = self.ast[node_index]
-            print
             if edge == None:
                 self.tree_repr += '\t'*tab+f'level={tab} '+prod+f' ({node_index})'+'\n'
-                print
             elif is_terminal(prod):
                 t = self.ast[edge][PARENT]
                 self.tree_repr += '\t'*tab+f'level={tab} '+prod+'='+t+f' ({node_index})'+'\n'
@@ -532,14 +531,14 @@ class parser:
         for node_index in list_node_i:
             prod, edge = self.ast[node_index]
             if is_nonterminal(prod) and (edge == None):
-                print('\t'*tab+f'level={tab} '+prod+'='+str(edge)+f' ({node_index})')
+                intended_print('\t'*tab+f'level={tab} '+prod+'='+str(edge)+f' ({node_index})')
             elif edge == None: # terminal such as ('{', None)
-                print('\t'*tab+f'level={tab} '+prod+f' ({node_index})')
+                intended_print('\t'*tab+f'level={tab} '+prod+f' ({node_index})')
             elif is_terminal(prod): # terminal 
                 t = self.ast[edge][PARENT]
-                print('\t'*tab+f'level={tab} '+prod+'='+t+f' ({node_index})')
+                intended_print('\t'*tab+f'level={tab} '+prod+'='+t+f' ({node_index})')
             else:
-                print('\t'*tab+f'level={tab} '+prod+f' ({node_index})')
+                intended_print('\t'*tab+f'level={tab} '+prod+f' ({node_index})')
                 self.print_tree(edge, tab+1, False)
 
     def error(self, symbol, val):
@@ -610,8 +609,8 @@ class parser:
             elif self.lr_0_parsing_table[top].get(None):
                 operation, param = self.lr_0_parsing_table[top][None]
             else:
-                print(self.productions_stack, '\n')
-                print(s)
+                intended_print(self.productions_stack, '\n')
+                intended_print(s)
                 self.error(token, value)
             # operation found
             if  operation == SHIFT:

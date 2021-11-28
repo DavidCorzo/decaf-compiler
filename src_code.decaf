@@ -1,4 +1,14 @@
 class Program {
+    def int sum(int num1, int num2, int num3) {
+        num1 = (num1 + num2);
+        print_var(num1);
+        print_str("\n");
+        print_var(num2);
+        print_str("\n");
+        print_var(num3);
+        return 0;
+    }
+    
     def void main() {
         int i;
         for (i = 0; (i < 10); i += 1;) {
@@ -7,5 +17,7 @@ class Program {
                 print_str("\n");
             }
         }
+        print_str("\n");
+        sum(56, (56*2), 7);
     }
 }

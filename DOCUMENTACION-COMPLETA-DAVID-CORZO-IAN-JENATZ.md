@@ -1,5 +1,16 @@
 # **COMPILADOR DECAF – DAVID CORZO & IAN JENATZ**
 ## FASE 1 – SCANNER Y LEXER:
+
+En este README se encuentra en general cómo funcióna el lexer, sin embargo para detalles triviales hay documentación en cada método del algoritmo que se pueden consultar en cuyo caso se necesite.
+
+El algoritmo consta de 4 clases:
+- class NFA
+- class DFA 
+- class scanner
+- class error_msg
+
+A continuación explicaré cada una.
+
 ### **DOCUMENTACIÓN DE FUNCIONES GLOBALES:**
 1.	**def add_edge**:
     * Esta función chequea el diccionario de estados para poder insertar una llave y valor, primero chequea si la llave que corresponde a épsilon existe en el diccionario, si no existe hace un update agregando la llave y el valor (que es un set), si existe simplemente agrega al set correspondiente. Si la llave no es épsilon simplemente se hace un update al número como valor puesto a que sólo épsilon puede tener varias aristas, todo lo demás tiene aristas únicas.
@@ -13,6 +24,15 @@
 2.	**class dfa**:
     * Sirve la exactamente la misma función que la clase anterior, pero se utiliza para el DFA.
 3.	**class NFA**:
+	* En esta clase se construye el NFA de los estados y sus aristas. Los estados son guardados en un diccionario de la siguiente forma:
+		```
+		{<nombre_de_estado>:{<arista_1>:<siguiente_estado1>, ... ,<arista_n>:<sigiente_estado_n>}, <nombre_de_siguiente_estado>:{<aristas>}}
+		```
+		Ejemplo:
+		```
+		{1:{'a':2}, 2:{'b':3}, 3:{}}
+		```
+		La única arista que tiene más de un siguiente estado es la de None que es la representación que usamos para denotar épsilon. Todas las demás arístas son únicas. Se utilizó el algorimo de thompson para construir cada operación especificada del regex. Cada operación se hace push a un stack, si este stack no tiene un length de 1 al finalizar la operación la expresión regular es incorrecta (usualmente es por que falta una concatenación).
     * Esta clase toma una expresión regular y devuelve un épsilon-nfa. Contiene los siguientes métodos:
     * **def infix_to_postfix**: Este método usa el atributo de clase 'self.infix', que es una expresión regular en forma normal, la transformamos a una postfix por conveniencia del algoritmo.  Luego procede a hacer una expresión regular que está en forma de postfix. Ejemplo: a+b+(c+d) -> cd+a+b+
     * **def regex_or**: Operación or. Si la última operación y la penultima fueron 'c' y '|' estamos hablando de una operación tipo or encadenada, no crearemos más nodos con epsilon, usaremos los que ya están y sólo agregaremos la nueva arista de épsilon al nfa 'c'. De lo contrario creamos dos nuevos estados y unimos el estado inicial a los dos nfas que le dimos pop, a los dos nfas que les dimos pop les agregamos aristas al nuevo nodo final y le damos push al stack. Registramos operación '|' a menos que nos indiquen lo contrario.
@@ -23,6 +43,16 @@
     * **def thompson_construction**: Esto convierte la expresión regular en epsilon nfa, epsilon estará representado por 'None' Convertimos el regex a postfix. Checkeamos los operadores y llamamos a las funciones según la operación especificada. Si está precedida por \\ si escapa el siguiente character, si el character siguiente es n o t los registramos como \n y \t, de lo contrario omitimos \\ y solo agarramos el siguiente character. Si el char input no es ningun operador entonces asumimos que es un character. Si es épsilon no lo agregamos al input alphabet.
     * **extra funcionalidad**: el método **draw_nfa** importa librerías que grafican el NFA para poder visualizar el grafo. Este método permanece comentado puramente por razónes de rendimiento.
 4.	class DFA:
+	* Toma como argumento en su contructor a la clase NFA anterior. Los estados del NFA a continuación se les calcula el closure de cada uno y se almacena en un diccionario. 
+		Después, empezando por el estado inicial construimos la tabla de closure recursivamente, mientras van apareciendo nuevos estados del dfa los agregamos al registro de estados del dfa de la siguiente manera:
+		```
+		{<tupla_de_estados_de_closure_nfa>:{<arista>:<tupla_siguiente_estado_de_dfa>}}
+		```
+		Ejemplo:
+		```
+		{(3,4,5,6):{'a':(3,4,5)}, (3,4,5):{'b':(8)}, (8):{}}
+		```
+		Al terminar por conveniencia cambiamos los nombres de tuplas a un string autogenerado de letras y números.
     * **def calculate_closure_of_all_states**: Este método calcula el closure de todos los estados. Toma los estados de las variables globales e itera en sus claves. Luego, para cada clave de estado, calculamos el closure utilizando el método self.e_closure.
 	* **def closure_of_all_states**: 
 	* **def closures**: Este método asume que el método calculate_closure_of_all_states se ejecutó primero. Este método toma un conjunto de estados, que en nuestro caso significa un conjunto de números. Estos estados son claves del diccionario de variables globales de closings_of_all_states. Este método simplemente agrega el closure de todos los estados que están contenidos en la variable de argumento set_of_states.
@@ -34,6 +64,7 @@
 	* **def turn_to_dfa**: Llama a los métodos correpondientes para construir el DFA a partir de una construcción de NFA. Primero calculamos el closure de todos los estados indiscriminadamente. Guardamos el estado de inicio del dfa para registrarlo en el objeto. Construimos el DFA con el algoritmo de subset construction. Por ultimo, puesto que las llaves del diccionario son tuplas dichas tuplas las remplazamos por una letra autogenerada única para hacer que debugging sea más fácil.
     * **extra funcionalidad**: el método **draw_dfa** importa librerías que grafican el DFA para poder visualizar el grafo. Este método permanece comentado puramente por razónes de rendimiento.
 5.	class scanner: 
+	* Esta clase abre el archivo de tokens y las mete a un OrderedDict, en el archivo de tokens se asume que hay precedencia, la primera regex que haga match al buffer de texto ingresado es la que gana por precedencia, de esta manera logramos diferenciar entre 'if' y 'id', 'if' aparece primero en el archivo y por ello tiene mayor precedencia. Cada token y su expresión regular son convertidas a NFA y después a DFA para poder trabajar con ellas. Scanner también abre el archivo a leer y empieza a hacer el match de acuerdo a reglas establecidas en el método de 'scan'. De cualquier error llegar a ocurrir mandamos el número de línea y el número de columna a una instancia de clase de error_msg para que imprima dónde las coordinadas del archivo al igual que en qué caracter falló.
     * build=True builds the regular expressions, build=False tries to load the regular expressions. save=True saves the regular expression bank into a file. save=False doesnt save them.
     * **def append_to_list_of_token**: Se encarga de agregar el token detectado al stream de tokens, Si el match contiene ':None' el match no se agrega sino se agrega como token terminal para ser identificado en el parser.
 	* **def debug**: esta función imprime el resultado del lexer a un archivo llamado scan_debug.txt.
@@ -47,6 +78,7 @@
 	* **def save_automata**: Este método se encarga de tomar los DFAs ya construidos y guardalos con un serializador de objetos a un archivo, así la proxima vez podemos simplemente importar los DFAs y no construirlos, esto hace que corra más eficientemente y ahorra trabajo a la máquina.
 	* **def scan**: Con los DFAs ya construidos hace el scanning y le pasa el texto al lexer para reconocer los tokens.
 6.	class error_msg:
+	* Esta clase únicamente despliega errores al usuario si llegase a haber alguno. Después de imprimir el error en pantalla termina el programa con -1 por que hubo error.
     * Esta clase es la de mensajes de error. Illegal characters: toma como argumento la instancia del scanner y extrae el caracter y la posición de dicho caracter. Desupués para la ejecución. No_regex_match: toma con argumento la instancia del scanner y extrae las coordenadas. Después para ejecución.
     * **def illegal_character**: Despliega error de character illegal, puesto a que viene un caracter no aceptado en el lenguaje.
     * **def no_regex_match**: Despliega error de no match para el lexema dado.
@@ -247,3 +279,9 @@ method_name_gen
 	* **def method_decl_handler**: se encarga de la producción \<method_decl*\> iniciando la recursión al método self.method_decl_kleene.
 	* **def var_decl**: se encarga de la producción \<var_decl\> agarra cada nombre de variable, su tipo, y el offset del stack correspondiente.
 	* **def closing_curly**: se encarga de la \} que significa que debemos desallocar todas las variables del scope actual y darle pop al stack de scopes.
+
+## COMMAND LINE INTERFASE
+El command line interfase se usa de la siguiente manera:
+```
+python <archivo.py> --target <stage> --debug <stage --o <new_name>
+```

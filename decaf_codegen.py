@@ -8,7 +8,7 @@ DEBUG = False
 
 # GLOBAL VARIABLES
 mem_space = {'int':4, 'boolean': 1, 'class': 0, 'void': 0}
-VAR_TYPE, IS_ALLOCATED, SP_OFFSET, IS_ARGUMENT = 0, 1, 2, 3
+VAR_TYPE, IS_ALLOCATED, SP_OFFSET, IS_ARGUMENT, ARG_NUM = 0, 1, 2, 3, 4
 
 CALLEE_BEGINING, CALLEE_ENDING = 0, 1
 CALLEE_OFFSET = 40
@@ -89,16 +89,15 @@ def method_name_gen(method_name):
         return method_name
     
 class codegen:
-    def __init__(self, assembled_semantic:semantic, executable_filename='a.asm', debug=False):
+    def __init__(self, assembled_semantic:semantic, executable_filename):
         # previous globals
         self.dot_data                   = [instruction(f'.data', tabs=0)]
         self.dot_data_tag_gen           = tag_gen_for_dot_data()
-        self.debug                      = debug
         self.tag_calle_ender            = None
         # attr
         self.for_break                  = None
         self.for_begin                  = None
-        self.executable_filename        = executable_filename
+        self.executable_filename        = f'{executable_filename}.asm'
         self.ast                        = assembled_semantic.ast
         self.ast_head                   = assembled_semantic.ast_head
         self.scope_stack                = list()
@@ -107,6 +106,7 @@ class codegen:
         self.main_section               = list()
         """IF THE FUNCTION TAKES IN NO ARGUMENTS THEN IT WILL NOT APPEAR IN THE METHOD_ARGUMENTS DICTIONARY """
         self.method_arguments           = dict()
+        self.arg_num                    = 0
         self.method_return_types        = dict()
         self.callee_actions_performed   = dict()
         self.stack_ptr                  = 0
@@ -116,7 +116,29 @@ class codegen:
         self.field_decl_offset          = 0
         self.var_decl_offset            = 0
         self.initiate()
-        print(set([x for x in dir(self) if not x.startswith('__')])- set(vars(self)))
+    
+    def strip_comments(self, ins:str):
+        stripped_ins = str()
+        for char in ins:
+            if char == '#':
+                break
+            if char == '\t':
+                continue
+            stripped_ins += char
+        return stripped_ins
+                    
+    def debug(self, codegen_debug_file='codegen_debug.asm'):
+        codegen_debug_file = f'./decaf_debug/{codegen_debug_file}'
+        STAGE = 'CODEGEN'
+        intended_print(f'{"-"*10}PASSED {STAGE} STAGE{"-"*10}')
+        intended_print(f'\tCODEGEN RESULTS WITH COMMENTS AND FORMAT IN: {codegen_debug_file}')
+        with open(codegen_debug_file, mode='w+') as file:
+            file.truncate(0)
+            file.writelines(self.dot_data)
+            file.writelines(self.main_section)
+            for section in self.assembler_sections:
+                file.writelines(section)
+            file.close()
     
     def append_instructions(self, current_method, instructions):
         if (current_method == 'main'):
@@ -125,14 +147,13 @@ class codegen:
             self.assembler_sections[-1] += instructions
     
     def write_executable(self):
-        with open(self.executable_filename, mode='w+') as file:
+        with open(f'./{self.executable_filename}', mode='w+') as file:
             file.truncate(0)
-            file.writelines(self.dot_data)
-            file.writelines(self.main_section)
+            file.writelines([self.strip_comments(ins) for ins in self.dot_data])
+            file.writelines([self.strip_comments(ins) for ins in self.main_section])
             for section in self.assembler_sections:
-                file.writelines(section)
+                file.writelines([self.strip_comments(ins) for ins in section])
             file.close()
-        intended_print("Compiled Successfully")
     
     def get_pseudo_terminal_value(self, id_ptr):
         return self.ast[self.ast[id_ptr][PTR]][PARENT]
@@ -465,7 +486,7 @@ class codegen:
                 instruction(f'# end of method_call to {method_name}'),
             ])
         elif (productions == ['%id%', '(', '<comma_expr>', ')']):
-            ID_POS, COMMA_EXPR = 0, 2
+            ID_POS, COMMA_EXPR_POS = 0, 2
             # no allocation of the arguments
             method_name = method_name_gen(self.get_pseudo_terminal_value(children[ID_POS]))
             arg_space_alloc = sum([mem_space[x[VAR_TYPE]] for x in self.method_arguments[method_name].values()])
@@ -483,6 +504,8 @@ class codegen:
                 instruction(f'# arguments {arg_names} alloc'),
                 instruction(f'addi $sp $sp -{arg_space_alloc}')
             ])
+            comma_expr_children = self.ast[children[COMMA_EXPR_POS]][CHILDREN]
+            self.comma_expr(comma_expr_children, method_name, 0)
             self.append_instructions(self.current_method, [
                 instruction(f'jal {method_name}'),
                 instruction(f'# arguments {arg_names} dealloc'),
@@ -505,6 +528,61 @@ class codegen:
             pass
         else:
             codegen_std_error(f'did not find production like {productions} in method_call')
+
+    def comma_expr(self, children, method_name, arg_index):
+        if children == None: codegen_std_error(f'children cannot be null in comma_expr')
+        productions = [self.ast[x][PARENT] for x in children]
+        if (productions == ['<expr>', '<comma_expr">']):
+            EXPR_POS, COMMA_EXPR_DASH_POS = 0, 1
+            expr_children = self.ast[children[EXPR_POS]][CHILDREN]
+            expr_reg = self.expr(expr_children)
+            # search for current arg 
+            was_allocated = False
+            for arg_name, arg_attr in self.method_arguments[method_name].items():
+                if arg_attr[ARG_NUM] == arg_index:
+                    # intializing value on stack
+                    store_operation = 'sw' if self.method_arguments[method_name][arg_name][VAR_TYPE] == 'int' else 'sb'
+                    self.append_instructions(self.current_method, [
+                        instruction(f'{store_operation} {expr_reg} {arg_attr[SP_OFFSET]}($sp)')
+                    ])
+                    was_allocated = True
+                    break
+            if not was_allocated:
+                codegen_std_error(f'argument was not initilized.')
+            unoccupy_temp_reg(expr_reg)
+            comma_expr_dash_children = self.ast[children[COMMA_EXPR_DASH_POS]][CHILDREN]
+            self.comma_expr_dash(comma_expr_dash_children, method_name, arg_index + 1)
+        else:
+            codegen_std_error(f'no production like {productions} found')
+
+    def comma_expr_dash(self, children, method_name, arg_index):
+        if children:
+            productions = [self.ast[x][PARENT] for x in children]
+            if (productions == [',', '<expr>', '<comma_expr">']):
+                EXPR_POS, COMMA_EXPR_DASH_POS = 1, 2
+                expr_children = self.ast[children[EXPR_POS]][CHILDREN]
+                expr_reg = self.expr(expr_children)
+                # search for current arg 
+                was_allocated = False
+                for arg_name, arg_attr in self.method_arguments[method_name].items():
+                    if arg_attr[ARG_NUM] == arg_index:
+                        # intializing value on stack
+                        store_operation = 'sw' if self.method_arguments[method_name][arg_name][VAR_TYPE] == 'int' else 'sb'
+                        self.append_instructions(self.current_method, [
+                            instruction(f'{store_operation} {expr_reg} {arg_attr[SP_OFFSET]}($sp)')
+                        ])
+                        was_allocated = True
+                        break
+                if not was_allocated:
+                    codegen_std_error(f'argument was not initilized.')
+                unoccupy_temp_reg(expr_reg)
+                comma_expr_dash_children = self.ast[children[COMMA_EXPR_DASH_POS]][CHILDREN]
+                self.comma_expr_dash(comma_expr_dash_children, method_name, arg_index + 1)
+            else:
+                codegen_std_error(f'no production like {productions} found')
+            # for arg_name, arg_attr in self.method_arguments[method_name].items():
+            #     load_operation = 'sw' if arg_attr[VAR_TYPE] == 'int' else 'lb'
+            #     self.append(self.current_method, [instruction(f'{load_operation} {arg_attr[SP_OFFSET]}($sp)')])
 
     def get_var_reg(self, var_name):
         var_attr, variable_offset = self.get_var(var_name)
@@ -891,7 +969,7 @@ class codegen:
         if self.callee_actions_performed.get(self.current_method):
             if self.callee_actions_performed[self.current_method][CALLEE_BEGINING]:
                 return
-        instructions = [
+        self.append_instructions(self.current_method, [
             instruction(f'# start callee main header'),
             instruction(f'move $fp $sp')    , # copy $sp to $fp, $fp = $sp
             instruction(f'addi $sp $sp -{CALLEE_OFFSET}'), # -40 it is
@@ -906,8 +984,7 @@ class codegen:
             instruction(f'sw $s6 32($sp)')  , # saving $s6 to stack
             instruction(f'sw $s7 36($sp)')  , # saving $s7 to stack
             instruction(f'# end callee main header'),
-        ]
-        self.main_section += instructions
+        ])
         self.callee_actions_performed['main'] = [False]*2
         self.callee_actions_performed['main'][CALLEE_BEGINING] = True
     
@@ -917,11 +994,14 @@ class codegen:
         if self.callee_actions_performed.get(self.current_method):
             if self.callee_actions_performed[self.current_method][CALLEE_ENDING]:
                 return
-        instructions = [
+        if self.field_decl_offset != 0: 
+            self.append_instructions(self.current_method, [
+                instruction(f'addi $sp $sp {self.field_decl_offset} # field_decl dealloc')]
+            )
+        self.append_instructions(self.current_method, [
             # deallocate field_decl
             instruction(f'# begin callee main ender'),
             instruction(f'{self.tag_calle_ender}:'),
-            instruction(f'addi $sp $sp {self.field_decl_offset} # field_decl dealloc'),
             # return has already been assigned to $v0
             instruction(f'lw $fp 0($sp)') , # recover $fp
             instruction(f'sw $ra 4($sp)') , # recover $ra
@@ -939,8 +1019,7 @@ class codegen:
             instruction(f'li $v0, 10'),
             instruction(f'syscall'),
             instruction(f'# end callee main ender'),
-        ]
-        self.main_section += instructions
+        ])
         self.callee_actions_performed['main'][CALLEE_ENDING] = True
     
     def callee_ender(self):
@@ -995,6 +1074,7 @@ class codegen:
                 self.method_return_types[method_name] = self.type_or_void(children[TYPE_OR_VOID_POS])
                 # '(', '<method_args>', ')'
                 method_args_children = self.ast[children[METHOD_ARGS_POS]][CHILDREN]
+                self.arg_num = 0
                 self.method_args(method_args_children, method_name)
                 # '<block>'
                 block_children = self.ast[children[BLOCK_POS]][CHILDREN]
@@ -1093,7 +1173,9 @@ class codegen:
     def method_arguments_appender(self, method_name, arg_name, var_type, has_been_allocated, stack_pointer_offset, is_arg=True):
         if not self.method_arguments.get(method_name):
             self.method_arguments[method_name] = dict()
-        self.method_arguments[method_name][arg_name] = [var_type, has_been_allocated, stack_pointer_offset, is_arg] 
+        self.method_arguments[method_name][arg_name] = [var_type, has_been_allocated, stack_pointer_offset, is_arg, self.arg_num]
+        self.arg_num += 1
+
     
     def opening_curly(self):
         """NO ASSEMBLER OUTPUT UNTIL VARIABLE DECLARATION OR FIELD DECLARATION"""
@@ -1110,9 +1192,10 @@ class codegen:
         self.field_decl_offset = 0 # reseting field_decl just a formality
         self.field_decl_kleene(children)
         """ALLOCATE THE SPACE FOR THIS SCOPE, ACCESS THE SCOPE_SPACE"""
-        self.main_section += [
-            instruction(f'addi $sp $sp -{self.scope_space[(len(self.scope_stack)-1)]} # field_decl alloc')
-        ]
+        if self.field_decl_offset != 0:
+            self.main_section += [
+                instruction(f'addi $sp $sp -{self.field_decl_offset} # field_decl alloc')
+            ]
     
     def add_to_scope_space(self, scope, num):
         if self.scope_space.get(scope):

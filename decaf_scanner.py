@@ -3,6 +3,16 @@ from string import ascii_uppercase
 from typing import Iterable, OrderedDict
 from yaml import safe_load
 import pickle
+import sys
+
+intended_print = print
+intended_exit = exit
+
+def scanning_std_error(str):
+    intended_print(f'Scanning error: {str}.')
+    intended_print(f'In method {sys._getframe(1).f_code.co_name}.')
+    intended_exit(-1)
+
 
 def add_edge(states, state, key, value):
     if (key == None):
@@ -238,9 +248,7 @@ class NFA:
             index += 1
         # the nfa_stack_frames should be of length 1 at this point, otherwise the regex is missing a concatenation or some other thing.
         if (len(self.nfa_stack_frames) != 1): 
-            print(f"ERROR: nfa_stack_frames has length of {len(self.nfa_stack_frames)}")
-            print(f"{self.infix} is incorrect")
-            exit(-1)
+            scanning_std_error(f'nfa_stack_frames has length of {len(self.nfa_stack_frames)}\n\t\'{self.infix}\' is incorrect')
         self.nfa = self.nfa_stack_frames.pop()
         
     # def draw_nfa(self):
@@ -257,7 +265,6 @@ class NFA:
     #             else:
     #                 edges.append([state, next_state])
     #                 labels.append(char)
-    #     print(self.nfa)
     #     draw_graph(edges, labels)
 
 class DFA:
@@ -299,15 +306,12 @@ class DFA:
         ec = set()
         for state in new_dfa_state: # (6,) -> (8,4,5,6)
             ec |= self.closure_of_all_states[state]
-        # print(f"ec={ec}")
         dfa_state = {new_dfa_state: {}}
-        # print(self.input_alphabet)
         for char in self.input_alphabet:
             for state in ec:
                 # iterate over the keys and see if char is in the state
                 for transition_letter, next_state in self.states[state].items():
                     if (transition_letter == char):
-                        # print(state, states[state])
                         if (dfa_state[new_dfa_state].get(char) == None):
                             dfa_state[new_dfa_state].update({char : set()})
                         dfa_state[new_dfa_state][char].add(next_state) # {(6,): {'a': {5,6}}} -> {(6,): {'a': (5,6)}}
@@ -374,7 +378,6 @@ class DFA:
     #             else:
     #                 edges.append([state, next_state])
     #                 labels.append(char)
-    #     # print(self.dfa)
     #     draw_graph(edges, labels)
     
     def __repr__(self) -> str:
@@ -390,7 +393,6 @@ class DFA:
             return False
         else:
             self.current_position = self.dfa_states[self.current_position][char]
-            # print(self.current_position)
             return True
     
 
@@ -428,8 +430,10 @@ class scanner:
     def __del__(self):
         self.file.close()
     
-    def debug(self, scan_file='scan_debug.txt'):
-        print("PASSED SCANNING STAGE")
+    def debug(self, scan_file='./decaf_debug/scan_debug.txt'):
+        STAGE = 'SCANNING'
+        intended_print(f'{"-"*10}PASSED {STAGE} STAGE{"-"*10}')
+        intended_print(f'\tLINKED LIST OF TOKENS IN {scan_file}')
         with open(scan_file, mode='w+', encoding='utf8') as file:
             for k,v in self.linked_list_of_tokens:
                 file.write(f'{k} {v}')
@@ -564,26 +568,26 @@ class scanner:
 
 class error_msg:
     def illegal_character(self, scanner_instance:scanner):
-        print('Scanning error: illegal_character')
-        print(f"ILLEGAL CHARACTER FOUND '{scanner_instance.content[scanner_instance.content_index]}'")
-        print(f"illegal character found at line {scanner_instance.line_num} column {scanner_instance.char_num}")
-        exit(-1)
+        scanning_std_error('illegal_character\n\t\
+            ILLEGAL CHARACTER FOUND \'{scanner_instance.content[scanner_instance.content_index]}\'\n\t\
+            illegal character found at line {scanner_instance.line_num} column {scanner_instance.char_num}'
+        )
     
     def no_regex_match(self, scanner_instance):
-        print('Scanning error: no_regex_match')
-        print(f"NO KEYWORD MATCH FOR '{scanner_instance.content[scanner_instance.content_index]}'")
-        print(f"No match was found for the above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
-        exit(-1)
+        scanning_std_error('no_regex_match\n\t\
+            NO KEYWORD MATCH FOR \'{scanner_instance.content[scanner_instance.content_index]}\'\n\t\
+            No match was found for the above char in line {scanner_instance.line_num} column {scanner_instance.char_num}'
+        )
 
     def unmatching_doublequotes(self, scanner_instance):
-        print('Scanning error: unmatching_doublequotes')
-        print(f"FILE TERMINATED WITHOUT CLOSING STRING '{scanner_instance.content[scanner_instance.content_index]}'")
-        print(f"No double quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
-        exit(-1)
+        scanning_std_error('unmatching_doublequotes\n\t\
+            FILE TERMINATED WITHOUT CLOSING STRING \'{scanner_instance.content[scanner_instance.content_index]}\'\n\t\
+            No double quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}'
+        )
     
     def unmatching_singlequotes(self, scanner_instance):
-        print('Scanning error: unmatching_singlequotes')
-        print(f"FILE TERMINATED WITHOUT CLOSING CHAR LITERAL '{scanner_instance.content[scanner_instance.content_index]}'")
-        print(f"No single quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
-        exit(-1)
+        scanning_std_error('unmatching_singlequotes\n\t\
+            FILE TERMINATED WITHOUT CLOSING CHAR LITERAL \'{scanner_instance.content[scanner_instance.content_index]}\'\n\t\
+            "No single quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}'
+        )
 

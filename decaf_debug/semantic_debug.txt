@@ -1,0 +1,2 @@
+EXPRESSION RETURNS: 
+{43: 'int', 51: 'int', 53: 'int', 106: 'int', 147: 'int', 154: 'int', 161: 'int', 163: 'boolean', 174: 'int', 186: 'int', 194: 'int', 196: 'int', 203: 'int', 205: 'boolean', 253: 'int', 259: 'int', 267: 'int', 269: 'int', 274: 'int'}
