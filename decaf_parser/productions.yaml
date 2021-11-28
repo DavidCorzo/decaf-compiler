@@ -68,27 +68,26 @@
   - ['<assignment_statement>']
   - ['<method_call>', ';']
   - ['if', '<expr>', '<block>', '<else_block>']
-  - ['for', '<for_eval>', '<block>']
+  - ['for', '(', '<assignment_statement>', '<expr>', ';', '<assignment_statement>', ')', '<block>']
   - ['return', ';']
   - ['return', '<expr>', ';']
   - ['break', ';']
   - ['continue', ';']
   - ['<block>']
   - ['<expr>', ';']
-  - ['<print>', ';']
+  - ['<print_var>', ';']
+  - ['<print_str>', ';']
 <else_block>:
   - ['else', '<block>']
   - [null]
-<for_eval>:
-  - ['(', '<expr>', ';', '<assignment_statement>', ')']
 ###############
 # <method_call>
 ###############
 <method_call>:
   - ['%id%', '(', ')']
   - ['%id%', '(', '<comma_expr>', ')']
-  - ['callout', '(', '%string_literal%',  ')']
-  - ['callout', '(', '%string_literal%', ',', '<callout_arg">', ')']
+  - ['callout', '(', '<string_literal>',  ')']
+  - ['callout', '(', '<string_literal>', ',', '<callout_arg">', ')']
 <comma_expr>:
   - ['<expr>', '<comma_expr">']
 <comma_expr">:
@@ -96,12 +95,12 @@
   - [null]
 <callout_arg">:
   - ['<expr>']
-  - ['%string_literal%']
+  - ['<string_literal>']
   - ['<expr>', '<callout_args>']
-  - ['%string_literal%', '<callout_args>']
+  - ['<string_literal>', '<callout_args>']
 <callout_args>:
   - [',', '<expr>', '<callout_args>']
-  - [',', '%string_literal%', '<callout_args>']
+  - [',', '<string_literal>', '<callout_args>']
   - [null]
 ###############
 # <expr>
@@ -114,14 +113,16 @@
   - ['(', '!', '<expr>', ')']
   - ['(', '<expr>', ')']
   - ['(', '<expr>', '<bin_op>', '<expr>', ')']
-<print>:
-  - ['print_var', '%id%', '<subscript>']
+<print_var>:
+  - ['print_var', '(', '%id%', '<subscript>', ')']
+<print_str>:
+  - ['print_str', '(', '<string_literal>', ')']
 ###############
 # <callout_arg>
 ###############
 # <callout_arg>:
 #   - ['<expr>']
-#   - ['%string_literal%']
+#   - ['<string_literal>']
 ###############
 # <bin_op>
 ###############
@@ -147,3 +148,5 @@
   - ['%mult%']
   - ['%div%']
   - ['%mod%']
+<string_literal>:
+  - ['%string_literal%']

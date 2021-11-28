@@ -154,7 +154,7 @@ class codegen_statement:
             pass
         elif (productions == ['<expr>', ';']):
             pass
-        elif (productions == ['<print>', ';']):
+        elif (productions == ['<print_var>', ';']):
             pass
         else:
             codegen_std_error(f'statement {productions} did not match any.')

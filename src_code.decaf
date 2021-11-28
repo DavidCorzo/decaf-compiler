@@ -4,20 +4,28 @@ class Program {
     int y1[1];
 
     def int exp(int num, boolean r, int y) {
-        int n;
-        1;
-        n = (num*num);
-        n = (num > num);
-        return n;
+        num = (num + 1);
+        print_var(num);
+        print_str("string hello world ???");
+        if (num == 2) {
+            print_str("num is equal to 2");
+        }
+        else {
+            print_str("num is not equal to 2");
+        }
+        return num;
     }
-
-    def void y(int j, int k, boolean g) {}
-    def void j() {}
+    def void y(int j, int k, boolean g) {
+        print_var(y1);
+    }
+    def void j() {
+        print_var(b);
+    }
     def void main() {
-        int c;
-        boolean e;
-        a = true;
-        exp(6);
-        b = ((a + 16)*4);
+        int i;
+        for (i = 0; (i < 10); i += 1;) {
+            print_var(i);
+        }
+        return 0;
     }
 }

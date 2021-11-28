@@ -612,7 +612,7 @@ class scanner:
                 if (char == '\n'):
                     self.line_num += 1
                     self.char_num = 0
-            elif char in "(){}[];,!":
+            elif char in "(){}[]:;,!":
                 if buffer != '':
                     match_regex = self.recognize(buffer)
                     if match_regex: 
@@ -630,7 +630,7 @@ class scanner:
                     buffer = ''
                 symbol = char
                 next_char = self.peek_next()
-                if next_char != None:
+                if (next_char != None) and (char in '+-='):
                     if next_char in "=<>": 
                         symbol += next_char
                         self.content_index += 1
