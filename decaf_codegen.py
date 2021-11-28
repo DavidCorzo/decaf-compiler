@@ -165,7 +165,7 @@ class codegen:
         self.scope_stack.append({})
         self.scope_space[len(self.scope_stack)-1] = 0
         # main_section starting
-        self.main_section += [instruction(f'.globl main', 0), instruction(f'{MAIN_TAG}:', 0)]
+        self.main_section += [instruction(f'{MAIN_TAG}:', 0)]
         self.callee_header_main()
         self.assembler_sections.append([])
         self.traverse([self.ast_head])
@@ -222,10 +222,20 @@ class codegen:
             self.var_decl_offset = 0 # to define the scope
             var_decl_kleene_children = self.ast[children[VAR_DECL_KLEENE_POS]][CHILDREN]
             self.var_decl_kleene(var_decl_kleene_children)
+            if (self.scope_space[len(self.scope_stack)-1] != 0):
+                self.append_instructions(self.current_method, [
+                    instruction(f'# var_decl alloc'),
+                    instruction(f'addi $sp $sp -{self.scope_space[len(self.scope_stack)-1]}')
+                ])
             # '<statement*>'
             statement_kleene_children = self.ast[children[STATEMENT_KLEENE_POS]][CHILDREN]
             self.statement_kleene(statement_kleene_children)
             # '}'
+            if (self.scope_space[len(self.scope_stack)-1] != 0):
+                self.append_instructions(self.current_method, [
+                    instruction(f'# var_decl dealloc'),
+                    instruction(f'addi $sp $sp {self.scope_space[len(self.scope_stack)-1]}')
+                ])
             self.closing_curly()
         else:
             codegen_std_error(f'no production like {productions} found in block')
@@ -857,8 +867,8 @@ class codegen:
                 return
         self.append_instructions(self.current_method, [
             instruction(f'# begin callee header'),
+            instruction(f'move $fp $sp')    , # copy $sp to $fp, $fp = $sp
             instruction(f'addi $sp $sp -{CALLEE_OFFSET}'), # -40 it is
-            instruction(f'move $sp $fp')    , # copy $sp to $fp
             instruction(f'sw $fp 0($sp)')   , # push $fp to stack
             instruction(f'sw $ra 4($sp)')   , # push $ra to stack
             instruction(f'sw $s0 8($sp)')   , # saving $s0 to stack
@@ -882,8 +892,8 @@ class codegen:
                 return
         instructions = [
             instruction(f'# start callee main header'),
+            instruction(f'move $fp $sp')    , # copy $sp to $fp, $fp = $sp
             instruction(f'addi $sp $sp -{CALLEE_OFFSET}'), # -40 it is
-            instruction(f'move $sp $fp')    , # copy $sp to $fp
             instruction(f'sw $fp 0($sp)')   , # push $fp to stack
             instruction(f'sw $ra 4($sp)')   , # push $ra to stack
             instruction(f'sw $s0 8($sp)')   , # saving $s0 to stack
@@ -922,7 +932,7 @@ class codegen:
             instruction(f'sw $s5 28($sp)'), # recover $s5
             instruction(f'sw $s6 32($sp)'), # recover $s6
             instruction(f'sw $s7 36($sp)'), # recover $s7
-            instruction(f'move $fp $sp')  , # restore $sp this is the dealloc
+            instruction(f'move $sp $fp')  , # restore $sp = $fp this is the dealloc
             # instruction(f'jr $ra'), # this or end?
             instruction(f'# End Program'),
             instruction(f'li $v0, 10'),
@@ -956,7 +966,7 @@ class codegen:
             instruction(f'sw $s5 28($sp)'), # recover $s5
             instruction(f'sw $s6 32($sp)'), # recover $s6
             instruction(f'sw $s7 36($sp)'), # recover $s7
-            instruction(f'move $fp $sp')  , # restore $sp this is the dealloc
+            instruction(f'move $sp $fp')  , # restore $sp = $fp this is the dealloc
             instruction(f'jr $ra'),
             instruction(f'# end callee ender'),
         ])

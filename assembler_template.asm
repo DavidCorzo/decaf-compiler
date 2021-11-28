@@ -1,9 +1,25 @@
+.data
+    str: .asciiz "hello world\n"
 .text 
 main:
     # and
     li $t0 0
     li $t1 1
-    beq $t1 $zero false
+    # print(str1)
+    li $v0, 4
+    la $a0, str
+    syscall 
+    # print(register)
+    li $v0, 1
+    move $a0, $t0
+    syscall
+    # print(register)
+    li $v0, 1
+    move $a0, $t1
+    syscall
+    # End Program
+    li $v0, 10
+    syscall
 
     
 #boolean a;

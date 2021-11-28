@@ -2,10 +2,10 @@ class Program {
     def void main() {
         int i;
         for (i = 0; (i < 10); i += 1;) {
-            print_var(i);
-            print_str("\n");
+            if ((i % 2) == 0) {
+                print_var(i);
+                print_str("\n");
+            }
         }
-        return 0;
     }
 }
-# 0x0040002c
