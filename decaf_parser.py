@@ -298,11 +298,7 @@ class lr_0_t:
         self.reverse_lr_0_grammar_rules     = dict()
         self.ast_head                       = None
         self.index_grammar_rules()
-        # self.firsts()
-        # self.follows()
-        # self.unit_test('grammars/example_follow.yaml', 'grammars/example_first.yaml')
         self.construct_lr_0_table()
-        print([method for method in dir(self) if method.startswith('__') is False])
     
     def unit_test(self, follow_filename, first_file):
         follow_file = open(follow_filename)

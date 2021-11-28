@@ -20,42 +20,42 @@ main:
 	addi $sp $sp -4
 	# for loop
 	# for init asignment statement
-	li $t4 0
+	li $t1 0
 	# %assign% statement to i
-	sw $t4 0($sp) # returning i
+	sw $t1 0($sp) # returning i
 	T_0_for_begin:
-	lw $t6 0($sp) # <expr>::id i r-value id
-	li $t3 10
-	# $t6 < $t3 ?
-	bgt $t6 $t3 T_0_lt_false
-	beq $t6 $t3 T_0_lt_false
-		li $t6 1
+	lw $t2 0($sp) # <expr>::id i r-value id
+	li $t0 10
+	# $t2 < $t0 ?
+	bgt $t2 $t0 T_0_lt_false
+	beq $t2 $t0 T_0_lt_false
+		li $t2 1
 		j T_0_lt_fin
 	T_0_lt_false:
-		li $t6 0
+		li $t2 0
 		j T_0_lt_fin
 	T_0_lt_fin:
-	beq $t6 $zero T_0_for_end
-	lw $t2 0($sp) # <expr>::id i r-value id
-	li $t0 2
-	# $t2 % $t0 ?
-	div $t2 $t0
-	mfhi $t2
-	li $t1 0
-	# $t2 == $t1 ?
-	bne $t2 $t1 T_0_eq_false
-		li $t2 1
+	beq $t2 $zero T_0_for_end
+	lw $t3 0($sp) # <expr>::id i r-value id
+	li $t6 2
+	# $t3 % $t6 ?
+	div $t3 $t6
+	mfhi $t3
+	li $t7 0
+	# $t3 == $t7 ?
+	bne $t3 $t7 T_0_eq_false
+		li $t3 1
 		j T_0_eq_fin
 	T_0_eq_false:
-		li $t2 0
+		li $t3 0
 		j T_0_eq_fin
 	T_0_eq_fin:
-	# if $t2 ?
-	beq $t2 $zero T_0_if_false
-	lw $t7 0($sp)
+	# if $t3 ?
+	beq $t3 $zero T_0_if_false
+	lw $t5 0($sp)
 	# print register/var
 	li $v0, 1
-	move $a0, $t7
+	move $a0, $t5
 	syscall
 	# print str
 	li $v0, 4
@@ -63,11 +63,11 @@ main:
 	syscall
 	# else or end_if
 	T_0_if_false:
-	li $t4 1
+	li $t1 1
 	# %assign_inc% statement to i
-	lw $t5 0($sp) # fetching i
-	add $t5 $t5 $t4
-	sw $t5 0($sp) # returning i
+	lw $t4 0($sp) # fetching i
+	add $t4 $t4 $t1
+	sw $t4 0($sp) # returning i
 	j T_0_for_begin
 	T_0_for_end:
 	# var_decl dealloc

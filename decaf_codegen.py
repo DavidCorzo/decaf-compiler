@@ -116,6 +116,7 @@ class codegen:
         self.field_decl_offset          = 0
         self.var_decl_offset            = 0
         self.initiate()
+        print(set([x for x in dir(self) if not x.startswith('__')])- set(vars(self)))
     
     def append_instructions(self, current_method, instructions):
         if (current_method == 'main'):

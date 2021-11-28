@@ -47,8 +47,8 @@ PARSER_PRODUCTIONS_FILENAME = './productions.yaml'
 #             codegen_instance.debug()
 
 s = scanner('./src_code.decaf', './decaf_scanner/tokens'    , build=1, save=0)
-l = lr_0('<PROGRAM>'          , './decaf_parser/productions', build=1, save=0)
-# t = lr_0_t(l)
-# p = parser(t, s)
-# sem = semantic(p)
-# c = codegen(sem)
+l = lr_0('<program>'          , './decaf_parser/productions', build=1, save=0)
+t = lr_0_t(l)
+p = parser(t, s)
+sem = semantic(p)
+c = codegen(sem)

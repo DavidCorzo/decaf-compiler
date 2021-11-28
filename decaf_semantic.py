@@ -1,5 +1,14 @@
 from os import error
 from decaf_parser import lr_0, lr_0_t, parser, is_nonterminal, is_pseudo_terminal, PARENT, CHILDREN, PTR
+import sys
+
+intended_print = print
+intended_exit = exit
+
+def semantic_std_error(str):
+    intended_print(f'Semantic error: {str}.')
+    intended_print(f'In method {sys._getframe(1).f_code.co_name}.')
+    intended_exit(-1)
 
 PRODUCTION_DETECTED, SCOPE_OFFSET, = 0, 1
 INT, BOOLEAN = 'int', 'boolean'
@@ -15,9 +24,11 @@ class semantic:
         self.exprs                      = dict()
         self.unique_variables_and_scope_access()
     
-    def debug(self):
-        print("PASSED SEMANTIC CHECK")
-        print(f"EXPR RETURN {self.exprs}")
+    def debug(self, semantic_debug_file='semantic_debug.txt'):
+        intended_print("PASSED SEMANTIC CHECK")
+        with open(semantic_debug_file, mode='w+') as file:
+            file.write(f'EXPRESSION RETURNS: \n{self.exprs}')
+            file.close()
 
     def unique_variables_and_scope_access(self):
         self.scope_stack.append({})
@@ -115,18 +126,13 @@ class semantic:
             t_id   = self.return_t_of_var(var_name)
             if (t_id != t_expr):
                 if (t_id == 'boolean') and (t_expr == 'int'):
-                    print(f"Semantic error: '{var_name}' is type boolean and is being assigned an expression evaluated as int.")
-                    exit(-1)
+                    semantic_std_error(f'\'{var_name}\' is type boolean and is being assigned an expression evaluated as int.')
 
     def unique_var_error(self, var_name):
-        print(f"SEMANTIC ERROR: {var_name} is already declared. Identifiers need to be unique.")
-        error(-1)
-        exit(-1)
+        semantic_std_error(f'{var_name} is already declared. Identifiers need to be unique.')
     
     def var_not_declared(self, var_name):
-        print(f"SEMANTIC ERROR: {var_name} is not declared. Declare it before you use it.")
-        error(-1)
-        exit(-1)
+        semantic_std_error(f'\'{var_name}\' is not declared. Declare it before you use it.')
     
     def add_variable_to_scope(self, var_name, append_next):
         if append_next:
@@ -185,8 +191,7 @@ class semantic:
                 self.exprs[node_index] = 'boolean'
                 return 'boolean'
             else:
-                print(f'Semantic error: {n} is not bool_literal, nor char_literal, nor int_literal.')
-                exit(-1)
+                semantic_std_error(f'\'{n}\' is not bool_literal, nor char_literal, nor int_literal.')
         elif (productions == ['<expr>', '<bin_op>', '<expr>']):
             lexpr = self.head_expr_return(edge[0], append_next)
             bin_op = self.ast[self.ast[edge[1]][PTR][PARENT]][PARENT]
@@ -199,11 +204,9 @@ class semantic:
                     self.exprs[node_index] = BOOLEAN
                     return BOOLEAN
                 else:
-                    print(f"Semantic error: expr {lexpr} {bin_op} {rexpr} is invalid because {bin_op} is not <arith_op> nor is any of %rel_op%, %eq_op%, %cond_op%.")
-                    exit(-1)
+                    semantic_std_error(f'expr {lexpr} {bin_op} {rexpr} is invalid because {bin_op} is not <arith_op> nor is any of %rel_op%, %eq_op%, %cond_op%.')
             else:
-                print(f"Semantic error: {lexpr} {bin_op} {rexpr} are non compatible expr type= ( <expr> <bin_op> <expr> )")
-                exit(-1)
+                semantic_std_error(f'{lexpr} {bin_op} {rexpr} are non compatible expr type= ( <expr> <bin_op> <expr> )')
         elif (productions == ['%minus%', '<expr>']):
             first = productions[0]
             second = self.head_expr_return(edge[1], append_next)
@@ -211,23 +214,19 @@ class semantic:
                 self.exprs[node_index] = 'int'
                 return 'int'
             elif second == 'boolean':
-                print(f"Semantic error: {second} -<expr> cannot operate with boolean only with int.")
-                exit(-1)
+                semantic_std_error(f'{second} -<expr> cannot operate with boolean only with int.')
             else:
-                print(f"Semantic error: {second} is not an int or boolean")
-                exit(-1)
+                semantic_std_error(f'{second} is not an int or boolean')
         elif (productions == ['(', '!', '<expr>', ')']):
             first = productions[1]
             second = self.head_expr_return(edge[2], append_next)
             if second == 'int':
-                print(f"Semantic error: {first} operand cannot operate with int only with boolean.")
-                exit(-1)
+                semantic_std_error(f'{first} operand cannot operate with int only with boolean.')
             elif second == 'boolean':
                 self.exprs[node_index] = 'boolean'
                 return 'boolean'
             else:
-                print(f"Semantic error: {second} is not an int or boolean")
-                exit(-1)
+                semantic_std_error(f'{second} is not an int or boolean')
         elif (productions == ['(', '<expr>', ')']):
             first = productions[0]
             expr = self.head_expr_return(edge[1], append_next)
@@ -239,8 +238,7 @@ class semantic:
                 self.exprs[node_index] = 'boolean'
                 return 'boolean'
             else:
-                print(f"Semantic error: expr returned {expr} which is not int nor boolean.")
-                exit(-1)
+                semantic_std_error(f'expr returned {expr} which is not int nor boolean.')
         elif (productions == ['(', '<expr>', '<bin_op>', '<expr>', ')']):
             lparen = productions[0]
             lexpr = self.head_expr_return(edge[1], append_next)
@@ -255,8 +253,6 @@ class semantic:
                     self.exprs[node_index] = BOOLEAN
                     return BOOLEAN
                 else:
-                    print(f"Semantic error: expr {lexpr} {bin_op} {rexpr} is invalid because {bin_op} is not <arith_op> nor is any of %rel_op%, %eq_op%, %cond_op%.")
-                    exit(-1)
+                    semantic_std_error(f'expr {lexpr} {bin_op} {rexpr} is invalid because {bin_op} is not <arith_op> nor is any of %rel_op%, %eq_op%, %cond_op%.')
             else:
-                print(f"Semantic error: {lexpr} {bin_op} {rexpr} are non compatible expr type= ( <expr> <bin_op> <expr> )")
-                exit(-1)
+                semantic_std_error(f'{lexpr} {bin_op} {rexpr} are non compatible expr type= ( <expr> <bin_op> <expr> )')

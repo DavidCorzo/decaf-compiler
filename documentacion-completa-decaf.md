@@ -53,17 +53,19 @@
     * **def unmatching_doublequotes**: Despliega error por que el segundo " está ausente, o hay uno de más en un string.
     * **def unmatching_singlequotes**: Despliega error por que el segundo ' está ausente, o hay uno de más en un character.
 
-FASE 2 - PARSER:
+## FASE 2 - PARSER:
 ### **DOCUMENTACIÓN DE FUNCIONES GLOBALES:**
-* **def is_nonterminal**: 
-* **def is_terminal**: 
-* **def is_terminal_with_value**: 
-* **def is_pseudo_terminal**: 
-* **def print_dict**: 
-* **def num_label_maker**: 
-* **def printable**: 
+* **def is_nonterminal**: esta función chequea si un elemento es un no terminal chequeando si el primer caracter es '\<' y el último es '\>'
+* **def is_terminal**: esta función chequea si un elemento es un terminal chequeando si el primer caracter no es '\<' y el último no es '\>'
+* **def is_terminal_with_value**: esta función chequea si el elemento es tiene el símbolo '%' al principio y al final y si tiene el character ':' en medio, esto indica que usaremos el valor y descartaremos la etiqueta. Ejemplo ('%keyword:None%', 'if') significa que usaremos el 'if' descartaremos el primer elemento de la tupla.
+* **def is_pseudo_terminal**: esta función chequea si el elemento es tiene el símbolo '%' al principio y al final, esto significa que tendrá 2 nodos en el árbol cuando parseamos.
+* **def print_dict**: esta función simplemente imprime un diccionario de manera bonita.
+* **def num_label_maker**: esta función genera números para nombrar los estados del DFA de manera única, no se usa puesto a que sólo se usó para debuggear.
+* **def printable**: remplaza 'None' por el character 'ε' para poder imprimirlo de manera más fácil.
+* **def parser_std_error**: esta función imprime el mensaje de error y para ejecución del programa al ser llamada, además imprime en qué función fallo para poder debuggear más fácil.
 ### **DOCUMENTACIÓN DE CLASES USADAS:**
 1. class lr_0
+    * Esta clase se ocupa de poder armar el DFA de producciones usando el algoritmo de LR(0)
     * **def advance_dot_by_one**: Esta función simplemente toma un ítem de tupla, separa la izquierda de la derecha y la derecha avanza el punto a la vez.
 	* **def calculate_transitions**: calcula las transiciones de un estado a otro tomando los items del estado y retorna los items con el '•' ya movido una posición para adelante si en cuyo caso es posible.
 	* **def closures**: En esta función calculamos el cierre de todos los ítems de forma indiscriminada. Esto se hace para evitar la recursividad innecesaria de elementos calculados, en su lugar simplemente acceda al cierre de ese elemento específico en el diccionario de ya elementos calculados.
@@ -121,20 +123,127 @@ FASE 2 - PARSER:
         2. Calcular elementos: luego tomamos la gramática recién importada y fabricamos los elementos de todos las producciones de la gramática, estas se almacenarán en self.items.
             - La variable de compensación se debe a que no queremos agregar un '•' después del dólarsigno ya que ese es el estado de aceptación, el desplazamiento nos impide iterar enmás tiempo y fabricando el artículo con el punto como último elemento después del dólar.
             - también estamos seguros de hacer una copia de la producción antes de agregar el punto, de lo contrario python asumirá que nos referimos al puntero a las reglas gramaticales reales, y modificará eso cuando queremos una copia de la regla y luego agregamos el punto.
-            - los elementos se almacenan con un índice como clave y una representación de tupla del elemento como un valor, un ejemplo:  ``{0: ('<S´>', '•', '<S>', '$'), 1: ('<S´>', '<S>', '• PS``
+            - los elementos se almacenan con un índice como clave y una representación de tupla del elemento como un valor, un ejemplo:  
+            ```
+            {0: ('<S´>', '•', '<S>', '$'), 1: ('<S´>', '<S>', '• PS
+            ```
             - El primer elemento de la representación de tupla es el lado izquierdo y el resto de la los elementos posteriores al primero son el lado derecho de la producción.
-        3. Calcule self.reverse_item: self.reverse_item exactamente igual que self.items solo que las claves son las tuplas y los valores son índices, ejemplo: ``{('<S´>', '•', '<S>', '$'): 0, ('<S´>', '<S>', '•', '$'): 1 , ...}.``
-            - Esto es solo por conveniencia y eficiencia, los elementos de acceso a los mapas de hash son un tiempo constante, Sin embargo, desea buscar por valor, debe tomar un tiempo lineal, por lo tanto, es mejor tener un versión inversa del mapa hash.
-        4. Calcular self.closed_rules son una copia de self.grammar_rules pero todas las producciones tienen un punto en el comienzo del lado derecho. Esto es útil a la hora de calcular el cierre ya que si tenemos un punto seguido de un no terminal debemos sumar todas las producciones de ese no terminal con el punto en el principio, las reglas autocerradas obtienen como clave las lhs como de costumbre, y las rhs es la lista de producciones con el punto añadido en la primera posición. El lhs es el primer elemento de la tupla, el rhs es todo elementos restantes después del primero. Ejemplo: ``{'<S´>': [('<S´>', '•', '<S>', '$')], '<S>': [('<S>', '•' , '<A>', '<C>', '<B>'), ...}``
+        3. Calcule self.reverse_item: self.reverse_item exactamente igual que self.items solo que las claves son las tuplas y los valores son índices, ejemplo: 
+        ```
+        {('<S´>', '•', '<S>', '$'): 0, ('<S´>', '<S>', '•', '$'): 1 , ...}.
+        ```
+        Esto es solo por conveniencia y eficiencia, los elementos de acceso a los mapas de hash son un tiempo constante, Sin embargo, desea buscar por valor, debe tomar un tiempo lineal, por lo tanto, es mejor tener un versión inversa del mapa hash.
+        4. Calcular self.closed_rules son una copia de self.grammar_rules pero todas las producciones tienen un punto en el comienzo del lado derecho. Esto es útil a la hora de calcular el cierre ya que si tenemos un punto seguido de un no terminal debemos sumar todas las producciones de ese no terminal con el punto en el principio, las reglas autocerradas obtienen como clave las lhs como de costumbre, y las rhs es la lista de producciones con el punto añadido en la primera posición. El lhs es el primer elemento de la tupla, el rhs es todo elementos restantes después del primero. Ejemplo: 
+        ```
+        {'<S´>': [('<S´>', '•', '<S>', '$')], '<S>': [('<S>', '•' , '<A>', '<C>', '<B>'), ...}
+        ```
         5. Calcular self.closed_indexes es exactamente lo mismo que self.closed_rules solo que en lugar de tener realmente el reglas con el punto tenemos el índice de los elementos que calculamos en el paso 2. Recuerde que los elementos tenían un índice en el diccionario / mapa hash estamos usando ese índice, ya que es solo un número único, no una tupla, por lo que ocupa menos espacio, porque un DFA de producciones para una gramática compleja puede ocupar fácilmente millones de estados, mejor Sea eficiente con la cantidad de memoria que toman los estados.
 	* **def load_lr_0_dfa**: va a buscar el archivo en el que se guardó el DFA de producciones serializado y lo importa para no tener que construirlo.
 	* **def save_lr_0_dfa**: toma el DFA de producciones ya construido y lo guarda en un archivo así la próxima vez podemos simplemente importar el DFA de producciones en lugar de tener que construirlo.
-2. class lr_t_0
+2. class lr_t_0:
+    * Esta clase se ocupa de poder armar la tabla a partir del DFA de producciones usando el algoritmo de LR(0) PARSING TABLE.
+	* **def construct_lr_0_table**: esta función se encarga de construir la tabla de lr_0. Primero toma cada estado normal y calcula las transiciones, si la transición es por elemento no terminal entonces hace GOTO, si es por un elemento terminal entonces hace SHIFT. Despues por cada estado hoja que se detecto se le agregar REDUCE a la tabla donde corresponda. Posteriormente por cada estado marcado como épsilon se agrega el REDUCE correspondiente. Si se encuentra que una posición ya está ocupado por otra operación entonces error por lenguaje ambiguo.
+	* **def get_first**: esta método se ocupa de calcular la operación first sobre la gramática. Este método no se utilizó en el algoritmo puesto a que no se usó SLR sino LR(0) PARSING TABLE.
+	* **def unit_test**: este es unit test para chequear si la operación first y la operación follow están dando el resultado correctamente, no se utiliza por que no terminamos usando SLR.
+	* **def calculate_follow**: este método se ocupa de calcular la operación follow.
+	* **def beta_contains_epsilon**: Este método 
+	* **def is_nullable**: simplemente chequea épsilon está en la tabla de firsts, no se usa por que LR(0) PARSING TABLE no lo requiere.
+	* **def follows**: Hace la operación follow recursivamente.
+	* **def calculate_firsts**: Hace la operación firsts recursivamente.
+	* **def first_sequence**: Se utiliza para el firsts, pero no usamos el firsts operation puesto a que cambiamos de algoritmo de SLR a LR(0) PARSING TABLE.
+	* **def index_grammar_rules**: toma cada producción de la gramática y asigna un índice único para poder hacer reduce por una producción en específico.
+	* **def detect_left_recursion**: Este método detecta 'left recursion' que era un problema para SLR, pero no es problema para el LR(0) PARSING TABLE, entonces no la usamos.
+	* **def make_pending_follows**: Se utiliza para el follow, pero no usamos el firsts operation puesto a que cambiamos de algoritmo de SLR a LR(0) PARSING TABLE.
+	* **def firsts**: calcula la operación firsts recursivamente.
+	* **def calculate_feasable_first**: calcula la operación firsts que no requieren recursión, es decir, los casos bases para poder ahorrarnos esto en la recursión de la operación first.
 3. class parser
+	* **def str_tree**: esta función devuelve el AST en string, en un formato entendible para debug en la terminal, no es llamada puesto a que sólo está ahi para poder debuggear.
+	* **def debug**: imprime el resultado del parser, que es el AST a un archivo llamado tree_debug.txt.
+	* **def parse**: usa la tabla de la fase anterior para armar el AST con las operaciones correspondientes.
+	* **def shift**: Hace la operación SHIFT.
+	* **def reduce**: Hace la operación REDUCE.
+	* **def goto**: Hace la operación GOTO.
+	* **def print_tree**: esta función imprime el AST en un formato entendible para debug en la terminal, no es llamada puesto a que sólo está ahi para poder debuggear.
+	* **def error**: depliega error si el parser detecta que el stream de tokens está incorrecto gramáticamente.
 
-FASE 3 - SEMANTIC:
+## FASE 3 - SEMANTIC:
+### **DOCUMENTACIÓN DE FUNCIONES GLOBALES:**
+* **def semantic_std_error**: despliega el error y el método en el que ocurrió.
+### **DOCUMENTACIÓN DE CLASES USADAS:**
+1. class semantic:
+    * Los chequeos semánticos especificados son: 
+        1. Chequeo de qué retornan las expresiones y si son compatibles al ser asignadas a una variable.
+        2. Chequeo de unicidad de variables, que las variables sean únicas en cada scope.
+        3. Chequeo de declaración de variables, que las variables estén declaradas antes de ser usadas.
+	* **def traverse**: esta función recorre el AST recursivamente para encontrar producciones de interes así poder conducir el chequeo semántico.
+	* **def return_t_of_var**: esta función retorna el tipo de una variable declarada, si no está declarada entonces error.
+	* **def head_expr_return**: esta función se ocupa de retornar el tipo de dato que retornará una expresión, al detectar el tipo que retornará entonces se almacena el puntero en un diccionario de expresiones junto con el tipo de dato que retornará para poder chequear a la hora de hacer una asignación si son tipos compatibles.
+	* **def debug**: imprime el diccionario a un archivo, en el cual se almacena el puntero a cada expresión junto con el tipo que retornará. Esto se utiliza para chequear si lo que devuelve la expresión y las asignaciones a variables son compatibles.
+	* **def closing_curly**: cuando se detecta '\}' se debe hacer un pop a el scope_stack en donde se desechan todas las variables del scope actual y se hace pop de la tabla de símbolos como tal para simbolizar que hemos terminado con este scope.
+	* **def check_if_var_exists**: chequea si la variable está declarada ya sea en el scope actual o en el scope anterior.
+	* **def assignment_statement**: se encarga de llamar a head_expr_return para ver qué retorna la expresión y chequea si lo que retorna es compatible con el tipo de varible a la cual se le hará la asignación, si no es compatible entonces error.
+	* **def var_not_declared**: error de variable utilizada sin antes haberla declarado.
+	* **def add_variable_to_scope**: agrega la variable al scope actual.
+	* **def unique_variables_and_scope_access**: hace un append de un nuevo scope, sigue atravesando el árbol en búsqueda de variables. Al terminal hace un pop al stack de scopes.
+	* **def open_curly**: cuando se detecta un '\{' se debe hacer un push de una nueva tabla de símbolos al scope_stack, puesto a que entramos a un nuevo scope.
+	* **def unique_var_error**: el error despliegado al detectar que hay dos variables detectadas en un mismo scope con el mismo nombre.
+	* **def method_decl**: almacena el tipo returnado por method_decl, además de agregar el nombre del método a la tabla de símbolos para poder chequear que los métodos en una misma clase tengan nombres únicos.
+	* **def id_**: se encarga de agregar variables a la tabla de símbolos del scope actual, si no es declaración de variables entonces se asume que se está usando la variable y se va a chequear a scopes anteriores y el actual para ver si existe, sino existe error.
 
-
-
-FASE 4 – GENERACIÓN DE CÓDIGO:
-
+## FASE 4 – GENERACIÓN DE CÓDIGO:
+### **DOCUMENTACIÓN DE FUNCIONES GLOBALES:**
+tag_gen_with_name
+tag_gen_for_dot_data
+codegen_std_error
+codegen_std_warning
+instruction
+occupy_temp_reg
+unoccupy_temp_reg
+method_name_gen
+### **DOCUMENTACIÓN DE CLASES USADAS:**
+1. class codegen:
+    * La clase codegen se ocupa de generar el código de assembler mips. Contiene una función por cada producción de interes en el lenguaje y a partir de esto hace la generación de código.
+	* **def write_executable**: escribe el archivo de assembler.
+	* **def method_decl_kleene**: se encarga de la producción \<method_decl*\>
+	* **def expr**: se encarga de la producción \<expr\>
+	* **def literal**: se encarga de la producción \<literal\>
+	* **def args_list**: se encarga de la producción \<args_list\>
+	* **def field_decl**: se encarga de la producción \<field_decl*\>
+	* **def else_block**: se encarga de la producción \<else_block\>
+	* **def statement_kleene**: se encarga de la producción \<statement*\>
+	* **def program_dash_handler**: inicia la recursión de \<program"\>
+	* **def get_subscript_val**: agarra el valor del subscript.
+	* **def block**: se encarga de la producción \<block\>
+	* **def get_var**: va a buscar la variable al scope actual y si no la encuentra va a buscar a scopes anteriores.
+	* **def var_decl_kleene**: se encarga de la producción \<var_decl*\>
+	* **def add_to_scope_space**: agrega espacio de la variable al scope para poder saber cuánto allocar y desallocar.
+	* **def add_var_to_scope**: agrega una variable al scope actual.
+	* **def field_decl_aux**: se encarga de la producción \<field_decl*_aux\>
+	* **def statement**: se encarga de la producción \<statement\>
+	* **def field_decl_kleene**: se encarga de la producción \<field_decl*\>
+	* **def initiate**: se encarga de la llamar a los métodos correspondientes para iniciar con la generación de código.
+	* **def field_decl_handler**: se encarga iniciar la recursión a la producción \<field_decl\>
+	* **def method_call**: se encarga de la producción \<method_call\>
+	* **def callee_header**: se encarga guardar los registros al stack correspondientes a una función.
+	* **def get_pseudo_terminal_value**: retorna el valor apuntado por una producción pseudo terminal. Por ejemplo: ``%int_lilteral% -> 56``, retorna el ``56``.
+	* **def callee_header_main**: se encarga de guardar los registros al stack correspondientes de la función 'main'.
+	* **def assignment_statement**: se encarga de la producción \<assignment_statement\>
+	* **def method_args**: se encarga de la producción \<method_args\>
+	* **def method_arguments_appender**: se encarga de agregar variables como argumentos al scope para así poder allocar y desallocar los arguments correspondientes.
+	* **def method_decl_aux**: se encarga de la producción \<method_decl*_aux\>
+	* **def print_var**: se encarga de la producción \<print_var\> que imprime un registro en mips.
+	* **def traverse**: se encarga buscar la producción \<program"\> y empezar la recursión.
+	* **def append_instructions**: se encarga de agregar instrucciones en mips producidas a la sección correspondiente.
+	* **def var_array_list**: se encarga de la producción \<var_array_list\>
+	* **def add_space_to_scope**: agrega espacio al scope para saber cuando allocar y desallocar en \<var_decl\>
+	* **def callee_ender**: se encarga de restaurar los registros correspondientes al terminar una función.
+	* **def method_args_dash**: se encarga de la producción \<method_args"\>.
+	* **def print_str**: se encarga de la producción \<print_str\> que en el programa imprime un string literal en mips.
+	* **def opening_curly**: se encarga agregar un scope al scope_stack en el cual se agregarán las variables correspodientes.
+	* **def callee_ender_main**: se encarga de restaurar los registros correspondientes al terminar el callee de la función 'main'.
+	* **def get_var_reg**: se encarga de hacer el load en mips para traer la variable de RAM a un registro.
+	* **def check_for_warnings**: se encarga de chequear que los registros estén desocupados para asegurar que ningun método se quedó con un registro y nunca se desallocó.
+	* **def type_or_void**: se encarga de la producción \<type|void\>
+	* **def method_decl_handler**: se encarga de la producción \<method_decl*\> iniciando la recursión al método self.method_decl_kleene.
+	* **def var_decl**: se encarga de la producción \<var_decl\> agarra cada nombre de variable, su tipo, y el offset del stack correspondiente.
+	* **def closing_curly**: se encarga de la \} que significa que debemos desallocar todas las variables del scope actual y darle pop al stack de scopes.
