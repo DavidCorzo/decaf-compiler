@@ -91,7 +91,7 @@ def method_name_gen(method_name):
 class codegen:
     def __init__(self, assembled_semantic:semantic, executable_filename='a.asm', debug=False):
         # previous globals
-        self.dot_data                   = [instruction(f'.data', tabs=0), instruction(f'D_endl: .asciiz "\\n"')]
+        self.dot_data                   = [instruction(f'.data', tabs=0)]
         self.dot_data_tag_gen           = tag_gen_for_dot_data()
         self.debug                      = debug
         self.tag_calle_ender            = None
@@ -165,11 +165,12 @@ class codegen:
         self.scope_stack.append({})
         self.scope_space[len(self.scope_stack)-1] = 0
         # main_section starting
-        self.main_section += [instruction(f'{MAIN_TAG}:', 0)]
+        self.main_section += [instruction(f'.globl main', 0), instruction(f'{MAIN_TAG}:', 0)]
         self.callee_header_main()
         self.assembler_sections.append([])
         self.traverse([self.ast_head])
         self.callee_ender_main()
+        self.dot_data += [instruction(f'.text', tabs=0)]
         self.check_for_warnings()
         self.write_executable()
 
@@ -345,15 +346,14 @@ class codegen:
             update_assignment_statement_children = self.ast[children[UPDATE_ASSIGNMENT_STATEMENT_POS]][CHILDREN]
             self.assignment_statement(update_assignment_statement_children)
             self.append_instructions(self.current_method, [
-                instruction(f'j {self.for_begin}')
+                instruction(f'j {self.for_begin}'),
+                instruction(f'{self.for_break}:')
             ])
         elif (productions == ['return', ';']):
             # 'return'
             self.append_instructions(self.current_method, [
                 instruction(f'j {self.tag_calle_ender}')
             ])
-            # ';'
-            pass
         elif (productions == ['return', '<expr>', ';']):
             EXPR_POS = 1
             # 'return'
@@ -370,12 +370,10 @@ class codegen:
             self.append_instructions(self.current_method, [
                 instruction(f'j {self.for_break}')
             ])
-            pass
         elif (productions == ['continue', ';']):
             self.append_instructions(self.current_method, [
                 instruction(f'j {self.for_begin}')
             ])
-            pass
         elif (productions == ['<block>']):
             BLOCK_POS = 0
             block_children = self.ast[children[BLOCK_POS]][CHILDREN]
@@ -523,10 +521,6 @@ class codegen:
                 instruction(f'li $v0, 1'),
                 instruction(f'move $a0, {var_reg}'),
                 instruction(f'syscall'),
-                instruction(f'# print endl'),
-                instruction(f'li $v0, 4'),
-                instruction(f'la $a0, D_endl'),
-                instruction(f'syscall')
             ])
             unoccupy_temp_reg(var_reg)
         else:

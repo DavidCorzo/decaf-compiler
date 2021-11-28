@@ -652,9 +652,11 @@ class scanner:
                     elif (char == '\\'):
                         self.content_index += 1
                         char = self.content[self.content_index]
-                        if (char == 'n'):   buffer += '\n'
-                        elif (char == 't'): buffer += '\t'
-                        else:               buffer += char
+                        if (char in 'nt'):   
+                            buffer = buffer[:-1]
+                            buffer += f'\\{char}'
+                        else:
+                            buffer += char
                     self.content_index += 1
                     self.char_num += 1
                 if (double_quote_detected):

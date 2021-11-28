@@ -6,3 +6,24 @@ main:
     beq $t1 $zero false
 
     
+#boolean a;
+#int b;
+#int y1[1];
+#def int exp(int num, boolean r, int y) {
+#    num = (num + 1);
+#    print_var(num);
+#    print_str("string hello world ???");
+#    if (num == 2) {
+#        print_str("num is equal to 2");
+#    }
+#    else {
+#        print_str("num is not equal to 2");
+#    }
+#    return num;
+#}
+#def void y(int j, int k, boolean g) {
+#    print_var(y1);
+#}
+#def void j() {
+#    print_var(b);
+#}
