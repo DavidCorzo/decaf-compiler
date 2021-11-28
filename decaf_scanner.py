@@ -14,18 +14,12 @@ def add_edge(states, state, key, value):
         states[state].update({key : value})
 
 def num_label_maker() -> int:
-    """
-    Generador para poder generar estados únicos. Usados en estados de nfa.
-    """
     num = 0
     while True:
         yield num
         num += 1
 
 def letter_label_maker() -> int:
-    """
-    Generador para poder generar estados únicos. Usados en estados de DFA.
-    """
     letter_index = 0
     num = 0
     while True:
@@ -72,9 +66,6 @@ class dfa:
         return f"dfa: start={self.start_state} end={self.final_states}"
 
 class NFA:
-    """
-    This class takes in a regular expression and returns a epsilon-nfa.
-    """
     def __init__(self, infix:str):
         self.states = dict()
         self.infix              :str            = infix
@@ -86,12 +77,6 @@ class NFA:
         
 
     def infix_to_postfix(self, infix) -> str:
-        """
-        Este método usa el atributo de clase self.infix, que es una expresión regular en forma infix.
-        expandemos expresiones abreviadas como [a-c] -> (a|b|c) a su equivalente en ors.
-        Luego procede a hacer una expresión regular que está en forma de postfix.
-        Example: a+b+(c+d) -> cd+a+b+
-        """
         postfix = ""
         stack   = []
         precedence = { # don't use 0, confuses the if's.
@@ -125,12 +110,6 @@ class NFA:
         return postfix
     
     def regex_or(self, push_to_op_stack=True) -> None:
-        """
-        Operación or. 
-        Si la última operación y la penultima fueron 'c' y '|' estamos hablando de una operación tipo or encadenada, no crearemos más nodos con epsilon, usaremos los que ya están y sólo agregaremos la nueva arista de épsilon al nfa 'c'.
-        De lo contrario creamos dos nuevos estados y unimos el estado inicial a los dos nfas que le dimos pop, a los dos nfas que les dimos pop les agregamos aristas al nuevo nodo final y le damos push al stack.
-        registramos operación '|' a menos que nos indiquen lo contrario.
-        """
         # OR a|b
         # pop the last two nfas.
         if ( len(self.last_op_stack) >= 2 ):
@@ -168,13 +147,6 @@ class NFA:
         if (push_to_op_stack): self.last_op_stack.append('|')
         
     def regex_character(self, char, push_to_op_stack=True) -> None:
-        """
-        Hacemos la operación de character.
-        creamos dos estados.
-        agregamos una arista del nodo inicial al final por medio del character que nos manden.
-        hacemos push al stack.
-        registramos la operación como 'c' en el stack.
-        """
         new_nfa = enfa()
         self.states[new_nfa.start_state] = {} ## dictlist() # creating the new keys:{}
         self.states[new_nfa.final_state] = {} ## dictlist() # creating the new keys:{}
@@ -188,12 +160,6 @@ class NFA:
         if (push_to_op_stack): self.last_op_stack.append('c')
 
     def regex_concatenation(self, push_to_op_stack=True) -> None:
-        """
-        Opeación concatenación.
-        Le damos pop dos veces al stack.
-        Si son characteres no unimos con épsilon sino simplemente usamos las mismas aristas de caracteres para poder concatenar. de lo contrario usamos épsilon para unir dos nfas.
-        Registramos la operacion '·' al stack a menos que nos especifiquen no hacerlo.
-        """
         # CONCATENATION/UNION EXPRESSION 
         nfa2: enfa = self.nfa_stack_frames.pop()
         nfa1: enfa = self.nfa_stack_frames.pop()
@@ -215,24 +181,12 @@ class NFA:
         if (push_to_op_stack): self.last_op_stack.append('·')
         
     def regex_question_mark(self, char, push_to_op_stack=True) -> None:
-        """
-        Realizamos la operación de ?. que es (epsilon|nfa)
-        Basicamente agregamos una arista de épsilon en el nodo inicial nfa que esta en el top del stack al final node del mismo nfa.
-        Y registramos la operación ? a menos que no especifiquen no hacerlo.
-        """
         # the character nfa is already the [-2] in the stack, the [-1] is epsilon.
         ## self.states[self.nfa_stack_frames[-1].start_state][None] = self.nfa_stack_frames[-1].final_state
         add_edge(self.states, self.nfa_stack_frames[-1].start_state, None, self.nfa_stack_frames[-1].final_state)
         if (push_to_op_stack): self.last_op_stack.append('?')
         
     def regex_kleene(self, push_to_op_stack=True) -> None:
-        """
-        Se encarga de realizar la operación de asterisko o kleene.
-        haceos pop del último nfa que esta en el stack.
-        creamos los estados necesarios para la operación unidos con épsilon respectivamente.
-        agregamos dicho nfa de nuevo al stack.
-        registramos como última operación el asterisco a menos que nos especifiquen que no lo hagamos con el argumento push_to_op_stack.
-        """
         # poping the previous nfa that we are going to do (nfa)*
         nfa1: enfa = self.nfa_stack_frames.pop()
         # start and final states for the new nfa
@@ -257,13 +211,6 @@ class NFA:
         if (push_to_op_stack): self.last_op_stack.append('*')
 
     def thompson_construction(self) -> None:
-        """
-        Esto convierte la expresión regular en epsilon nfa, epsilon estará representado por 'None'
-        Convertimos el regex a postfix.
-        Checkeamos los operadores y llamamos a las funciones según la operación especificada.
-        Si está precedida por \\ si escapa el siguiente character, si el character siguiente es n o t los registramos como \n y \t, de lo contrario omitimos \\ y solo agarramos el siguiente character.
-        Si el char input no es ningun operador entonces asumimos que es un character. Si es épsilon no lo agregamos al input alphabet.
-        """
         index = 0
         self.postfix = self.infix_to_postfix(self.infix)
         while (index < len(self.postfix)):
@@ -326,15 +273,6 @@ class DFA:
         self.current_match = False
 
     def e_closure(self, state) -> set:
-        """
-        Este método calcula recursivamente el closure de un sólo estado.
-        Primero declaramos un set que contendrá todos los estados con los cuales podemos llegar con epsilon.
-        Agregamos el estado actual.
-        revisamos si la llave de épsilon existe, si no existe este es el base case.
-        de lo contrario iteramos por todos los estados en los cuales podemos llegar con epsilon.
-        Por cada de estos estados hay que verificar si tienen más aristas de épsilon entonces hacemos la llamada recursiva.
-        Al terminar el for retornamos el closure del estado inicial que se pidió.
-        """
         closure_states = set()
         closure_states.add(state)
         if (self.states[state].get(None) == None): # there is no epsilon key.
@@ -345,30 +283,16 @@ class DFA:
             return closure_states
 
     def calculate_closure_of_all_states(self):
-        """
-        Este método calcula el closure de todos los estados.
-        Toma los estados de las variables globales e itera en sus claves.
-        Luego, para cada clave de estado, calculamos el closure utilizando el método self.e_closure.
-        """
         for i in self.states.keys():
             self.closure_of_all_states.update({i: self.e_closure(i)})
 
     def closures(self, set_of_states) -> tuple:
-        """
-        Este método asume que el método calculate_closure_of_all_states se ejecutó primero.
-        Este método toma un conjunto de estados, que en nuestro caso significa un conjunto de números.
-        Estos estados son claves del diccionario de variables globales de closings_of_all_states.
-        Este método simplemente agrega el closure de todos los estados que están contenidos en la variable de argumento set_of_states.
-        """
         closure = set()
         for i in set_of_states:
             closure |= self.closure_of_all_states[i]
         return tuple(closure)
 
     def subset_construction(self, new_dfa_state:tuple):
-        """
-        turns nfa to dfa usando el algoritmo de subset construction especificado en el libro con epsilon closure.
-        """
         # calculate e_closure de el start_state del nfa.
         if new_dfa_state in self.dfa_states.keys():
             return
@@ -396,9 +320,6 @@ class DFA:
             self.subset_construction(value)
 
     def dfa_states_prettify(self):
-        """
-        Cambia el nombre de los estados de tuplas a letras autogeneradas.
-        """
         for state in self.dfa_states.keys():
             self.dfa_states_names.update({state : next(dfa_label_gen)})
 
@@ -422,22 +343,12 @@ class DFA:
         self.dfa.final_states = named_final_states
 
     def turn_to_dfa(self):
-        """
-        Llama a los métodos correpondientes para construir el DFA a partir de una construcción de NFA.
-        Primero calculamos el closure de todos los estados indiscriminadamente.
-        Guardamos el estado de inicio del dfa para registrarlo en el objeto.
-        Construimos el DFA con el algoritmo de subset construction.
-        Por ultimo, puesto que las llaves del diccionario son tuplas dichas tuplas las remplazamos por una letra autogenerada única para hacer que debugging sea más fácil.
-        """
         self.calculate_closure_of_all_states()
         self.dfa.start_state = tuple([self.nfa.start_state])
         self.subset_construction(tuple([self.nfa.start_state])) # (6,)
-        self.dfa_states_prettify()
+        # self.dfa_states_prettify()
     
     def match(self, string_to_match) -> bool:
-        """
-        Nos permite meter un buffer de characteres y ver si hace match a la expresión regular actual que ya está en forma de DFA.
-        """
         current_state = self.dfa.start_state
         for char in string_to_match:
             if (self.dfa_states[current_state].get(char) != None):
@@ -473,9 +384,6 @@ class DFA:
         return f"({self.dfa_states})"
     
     def consume(self, char) -> bool:
-        """
-        Avanza un solo caracter en el dfa, si no hay por donde avanzar retornamos false para denotar que no es un match.
-        """
         if (self.current_position == None):
             self.current_position = self.dfa.start_state
         if (self.dfa_states[self.current_position].get(char) == None):
@@ -488,10 +396,6 @@ class DFA:
 
 class scanner:
     def __init__(self, src_code_filename, token_filename_wo_ext, build, save):
-        """
-        build=True builds the regular expressions, build=False tries to load the regular expressions.
-        save=True saves the regular expression bank into a file. save=False doesnt save them.
-        """
         self.filename = src_code_filename
         self.current_line = 0
         self.current_line_index = 0
@@ -521,15 +425,17 @@ class scanner:
         self.scan()
         self.linked_list_of_tokens.append((None, '$'))
     
-    def debug(self):
+    def __del__(self):
+        self.file.close()
+    
+    def debug(self, scan_file='scan_debug.txt'):
         print("PASSED SCANNING STAGE")
-        for k,v in self.linked_list_of_tokens:
-            print(k,v)
+        with open(scan_file, mode='w+', encoding='utf8') as file:
+            for k,v in self.linked_list_of_tokens:
+                file.write(f'{k} {v}')
+            file.close()
     
     def produce_automata(self):
-        """
-        Toma los tokens del archivo tokens.yaml y los compila a NFA y después a DFA y los agrega al diccionario deterministic_finite_automata como el <nombre del token>: <dfa compilado>.
-        """
         for token, regex in self.tokens.items():
             nfa1 = NFA(regex)
             nfa1.thompson_construction()
@@ -544,42 +450,25 @@ class scanner:
     
     def load_automata(self, fa_name):
         with open(fa_name, mode='rb') as file:
-            # self.deterministic_finite_automata = pickle.Unpickler(file).load()
             self.deterministic_finite_automata = pickle.load(file)
             file.close()
 
     def next_char(self):
-        """
-        Avanza al siguiente caracter en la cadena de input.
-        """
         self.content_index += 1
         
     def peek_current(self):
-        """
-        nos permite leer el caracter actual en el que estamos.
-        Si ya estamos en EOF retorna None. 
-        Consiguientemente terminando el proceso.
-        """
         if self.content_index < len(self.content):
             return self.content[self.content_index]
         else:
             return None
     
     def peek_next(self):
-        """
-        nos permite ver el siguiente caracter en el archivo para tomar decisiones.
-        """
         if ((self.content_index + 1) < len(self.content)):
             return self.content[self.content_index + 1]
         else:
             return None
     
     def recognize(self, buffer):
-        """
-        Toma un texto que es posiblemente un candidato a ser un token y las compara con todo el banco de expresiones regulares.
-        El primero que haga match es el que retorna, si ninguno hace match retorna None y se produce un error.
-        El primero significa que hay una precedencia, por ello ID esta de último.
-        """
         for token, determ_fa in self.deterministic_finite_automata.items():
             if (determ_fa.match(buffer)):
                 return token
@@ -591,9 +480,6 @@ class scanner:
         self.linked_list_of_tokens.append((match, token))
 
     def scan(self):
-        """
-        Con los DFAs ya construidos hace el scanning y le pasa el texto al lexer para reconocer los tokens.
-        """
         buffer = ""
         while (self.content_index < len(self.content)):
             char = self.content[self.content_index]
@@ -674,17 +560,9 @@ class scanner:
             self.char_num += 1
     
     def isascii(self, char):
-        """
-        Chequea si los characteres son ascii.
-        """
         return len(char) == len(char.encode())
 
 class error_msg:
-    """
-    Esta clase es la de mensajes de error.
-    illegal characters: toma como argumento la instancia del scanner y extrae el caracter y la posición de dicho caracter. Desupués para la ejecución.
-    no_regex_match: toma con argumento la instancia del scanner y extrae las coordenadas. Después para ejecución.
-    """
     def illegal_character(self, scanner_instance:scanner):
         print('Scanning error: illegal_character')
         print(f"ILLEGAL CHARACTER FOUND '{scanner_instance.content[scanner_instance.content_index]}'")
@@ -708,3 +586,4 @@ class error_msg:
         print(f"FILE TERMINATED WITHOUT CLOSING CHAR LITERAL '{scanner_instance.content[scanner_instance.content_index]}'")
         print(f"No single quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}")
         exit(-1)
+

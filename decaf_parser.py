@@ -1,8 +1,8 @@
-from os import error
 from yaml import safe_load
 from copy import deepcopy
 import pickle
 from decaf_scanner import scanner
+import sys
 
 def is_nonterminal(string):
     if string == None: return False
@@ -33,6 +33,14 @@ def printable(token):
     if token == None:
         token = 'ε'
     return token
+
+intended_print = print
+intended_exit = exit
+
+def parser_std_error(self, str):
+    intended_print(f'Parsing error: {str}.')
+    intended_print(f'In method {sys._getframe(1).f_code.co_name}.')
+    intended_exit(-1)
 
 LHS, RHS = 0, 1
 class lr_0:
@@ -67,53 +75,12 @@ class lr_0:
             self.load_grammar()
             self.closures()
             self.create_states()
-            # print_dict(self.items)
         else:
             self.load_lr_0_dfa()
         if save: 
             self.save_lr_0_dfa()
-        # print(self)
-        # print(self.accept_item)
-        # print(self.accept_state)
     
     def load_grammar(self):
-        """
-        1. Open file and read contents: First it opens the file and imports the contets which are the 
-            productions that define the grammar, this is stored in self.grammar and is represented 
-            in the form of a dictionary which keys are the left hand sides and who's 
-            value is the right hand side. Example: 
-                {'<S´>': [['<S>', '$']], '<S>': [['<A>', '<C>', '<B>'], ...}.
-        2. Calculate items: Then we grab the newly imported grammar and fabricate the items of all of 
-        the productions of the grammar, these will be stored in self.items. 
-            - The offset variable is because we don't want to add a '•' after the dollar 
-                sign since that is the accept state, the offset stops us from iterating on 
-                more time and fabricating the item with the dot as the last element after the dollar.
-            - we also are sure to make a copy of the production before adding the dot, otherwise
-                python will assume we mean the pointer to the actual grammar rules, and modify that 
-                when we want a copy of the rule and then add the dot.
-            - items are stored with an index as a key and a tuple representation of the item as 
-                a value, an example: {0: ('<S´>', '•', '<S>', '$'), 1: ('<S´>', '<S>', '•', '$'), ...}.
-            - the tuple representation's first element is the left hand side and the rest of the 
-                elements after the first are the right hand side of the production.
-        3. Calculate self.reverse_item: self.reverse_item exactly the same as self.items just that the keys are 
-            the tuples and the values are index, example: 
-                {('<S´>', '•', '<S>', '$'): 0, ('<S´>', '<S>', '•', '$'): 1, ...}.
-            - This is merely just for convenience and efficiency, hashmaps accessing elements are constant time,
-                however you want to search by value you need to take linear time, therefore it is better to have a 
-                reversed version of the hash map.
-        4. Calculate self.closed_rules are a copy of the self.grammar_rules but with all productions having a dot in the 
-            beggining of the right hand side. This is handy when calculating the closure since if we have a dot 
-            followed by a nonterminal we must add all of the productions of that non terminal with the dot at 
-            the beggining, self.closed rules gets as a key the lhs as usual, and the rhs is the list of productions 
-            with the added dot in the first position. The lhs is the first element of the tuple, the rhs is all 
-            remaining elements after the first. Example: 
-                {'<S´>': [('<S´>', '•', '<S>', '$')], '<S>': [('<S>', '•', '<A>', '<C>', '<B>'), ...}
-        5. Calculate self.closed_indexes is exactly the same as the self.closed_rules only that instead of actually having the 
-            rules with the dot we have the index of the items we calculated in step 2. Recall the items had an index in 
-            the dictionary/hashmap we are using that index since it is just a single number not a tuple, thus occupying 
-            less space, because a DFA of productions for a complex grammar can easily occupy millions of states, better
-            be efficient with how much the states take in memory.
-        """
         with open(self.productions_filename) as file:
             self.grammar_rules = safe_load(file)
             # get terminals
@@ -154,26 +121,6 @@ class lr_0:
             file.close()
     
     def closures(self):
-        """
-        In this function we calculate the closure of all the items indiscriminantly.
-        This is done to avoid unnecessary recursion of calculated items, instead we 
-        just access the closure of that specific item in the dictionary of already 
-        calculated items.
-        1. self.closure_of_current_item is the current state we are manufacturing, it is a set that 
-            stores the current item's indexes. Example: {0, 1, 2, 3} these are item indexes.
-        2. self.productions_processed keeps track of the productions that we have already 
-            processed when we are recursively calculating the closure in the self.get_closure_of_an_item.
-            We always start with registering the start production since we have already processed that one 
-            in it's entirety because it is the starting production.
-        3. call the self.get_closure_of_an_item function, this function will help us make states later on, 
-            since states are nothing more than the closure of various items.
-            - This method makes use of self.closure_of_current_item to add the what the self.get_closure_of_an_item finds recursively.
-                the method does not return anything it calls itself recursively but returns data to the self.closure_of_current_item 
-                attribute, and adds the productions it has processed to the self.productions_processed.
-        4. We add the calculated closure to the self.closure_table dictionary which is the index of the item as a 
-            key and its closure as a value. Example: {0: {1,2,3,4}, ...} item 0 has closure {1,2,3,4}
-        5. Repeat this for all the items.
-        """
         for item_index in self.items.keys():
             self.closure_of_current_item = set()
             self.productions_processed = set([self.start_production])
@@ -181,30 +128,6 @@ class lr_0:
             self.closure_table[item_index] = self.closure_of_current_item
 
     def get_closure_of_an_item(self, set_of_indexes):
-        """
-        This method calculates the closure of a single item. 
-        1. First it takes a set of indexes (indexes that represent items in the self.items dictionary).
-            These indexes are always part of the closure of the item, therefore the first thing we do is 
-            add it to the self.closure_of_current_item attribute of which this method has global access.
-        2. The set of indexes of the items are useless as indexes, we need the actual items, so we get 
-            the items by using the self.items dictionary and accessing via the key the actual item pointed to.
-        3. Pending productions: this is a set that stores the non terminals that are pending to process recursively
-            whenever we find an item that has a '•' and then a non terminal, we must add all the rhs's of that nonterminal
-            with a '•' at the begining, we will do this later so it will be left pending.
-        4. Base case, if the we have no pending productions we must add, we are done with the recursion and return, 
-            therefore terminating the recursion.
-        5. If we are not done, i.e. we have not broken the recursion with the base case we must process the pending 
-            productions, with a for loop we iterate through the set of pending lhs's to be processed. There is a chance 
-            we have already processed that lhs in an earlier recursive call so we must check for each lhs pending that we 
-            have not added it, thus saving unnecessary recursion, if it has not been added to self.productions added then 
-            we must calculate it, we already have the all the rules with the dot at the begining stored in self.closed_indexes
-            we just go and retrieve them and add them (the indexes) to the pending_items set which holds the items derived from 
-            the pending_productions set, the last thing we do is register the production as already processed to know not to 
-            process it again in future recursive calls.
-        6. Recursive call, we make the recursive call, the set_of_items in this one is the pending_items set, we do this to check 
-            if any other item we added has a '•' followed by a non terminal that needs closure.
-        """
-        
         self.closure_of_current_item |= set_of_indexes
         actual_items = {self.items[ai] for ai in set_of_indexes}
         pending_productions = set()
@@ -226,28 +149,6 @@ class lr_0:
         self.get_closure_of_an_item(pending_items)
     
     def create_states(self):
-        """
-        This function creates all the states.
-        1. self.create_state(set([0])) creates all the states recursively upon a single call by simply providing 
-            the kernel start state (the starting production with a '•' as first element of rhs).
-        2. The states and the transitions have now been created recursively, example:
-            {
-                State items: (0, 2, 6, 10, 13, 16, 19, 21, 23, 25): 
-                state transitons :{'<B>': (11, 17), 'd': (14,), 'g': (20,), 'h': (24,), '<A>': (3,), None: (22, 26), '<C>': (7,), '<S>': (1,)}
-                ...
-            }
-        3. The keys of the dictionary are already states, which are calculated with the closure of a starting 
-            set of items, but the transitions are unclosed sets of items, which means they are just added, they
-            are not states but instead are the items that if closure is performed on they become states.
-            In the next for loop we replace the unclosed items for the actual states. Example:
-            {
-                (0, 2, 6, 10, 13, 16, 19, 21, 23, 25): 
-                {'<C>': (7,), '<B>': (11, 17), 'h': (24,), '<A>': (3,), None: (22, 26), 'd': (14,), '<S>': (1,), 'g': (20,)}
-                ...
-            }
-            - Bear in mind that sometimes the unclosed state have a closure of just themselves, therefore the unclosed states 
-            are already states, but we do not know this until we replace them for the closed states.
-        """
         self.create_state(set([0]))
     
     def __repr__(self) -> str:
@@ -280,7 +181,7 @@ class lr_0:
             if (self.accept_item in state_key): 
                 if not self.accept_state: self.accept_state = self.renamed_states[state_key]
                 elif (self.accept_state == self.renamed_states[state_key]): pass
-                else: print("second accept state present")
+                else: intended_print("second accept state present")
             self.leaf_states.add(renamed_state)
             return renamed_state
         self.states[renamed_state] = transitions
@@ -292,8 +193,7 @@ class lr_0:
         epsilon_state = set(state_key) & self.epsilon_items
         if len(epsilon_state) > 0:
             if len(epsilon_state) != 1:
-                print("Parsing error: reduce-reduce by two productions on epsilon, ambiguous language.")
-                exit(-1)
+                parser_std_error(f'reduce-reduce by two productions on epsilon, ambiguous language.')
             self.epsilon_states[renamed_state] = list(epsilon_state)[0]
             
 
@@ -315,7 +215,6 @@ class lr_0:
             dot_pos = rhs.index('•')
             if (dot_pos + 1) < len(rhs):
                 after_dot = rhs[dot_pos + 1]
-                # if (after_dot != '$'):
                 if transitions.get(after_dot):
                     transitions[after_dot].add(self.reverse_item[item])
                 else:
@@ -330,10 +229,6 @@ class lr_0:
         return transitions
     
     def advance_dot_by_one(self, item_index):
-        """
-        This function simply takes in a tuple item, separates the lhs from the rhs and to the rhs
-        advances the dot at once.
-        """
         item = self.items[item_index]
         lhs = item[LHS]
         rhs = list(item[RHS:])
@@ -407,6 +302,7 @@ class lr_0_t:
         # self.follows()
         # self.unit_test('grammars/example_follow.yaml', 'grammars/example_first.yaml')
         self.construct_lr_0_table()
+        print([method for method in dir(self) if method.startswith('__') is False])
     
     def unit_test(self, follow_filename, first_file):
         follow_file = open(follow_filename)
@@ -484,8 +380,7 @@ class lr_0_t:
     
     def detect_left_recursion(self, lhs, first_rhs):
         if (lhs == first_rhs):
-            print(f"Parsing error: left recursion detected at {lhs}")
-            exit(-1)
+            parser_std_error(f'left recursion detected at {lhs}')
     
     def calculate_feasable_first(self, lhs):
         non_terminals = set()
@@ -583,8 +478,7 @@ class lr_0_t:
                     if not self.lr_0_parsing_table[leaf_state].get(p):
                         self.lr_0_parsing_table[leaf_state][p] = tuple([REDUCE, reduce_production_index])
                     else:
-                        print("Parsing error: in lr_0_t parsing table, position already occupied")
-                        exit(-1)
+                        parser_std_error(f'in lr_0_t parsing table, position already occupied')
         for state, item in self.epsilon_states.items():
             reduce_production = list(self.items[item])
             reduce_production.remove('•')
@@ -593,8 +487,7 @@ class lr_0_t:
             if not self.lr_0_parsing_table[state].get(None):
                 self.lr_0_parsing_table[state][None] = tuple([REDUCE, reduce_production_index])
             else:
-                print("Parsing error: in lr_0_t epsilon parsing state, position already occupied")
-                exit(-1)
+                parser_std_error(f'in lr_0_t epsilon parsing state, position already occupied')
         
 PARENT, CHILDREN, PTR = 0, 1, 1
 class parser:
@@ -611,10 +504,12 @@ class parser:
         self.tree_repr          = str()
         self.parse()
     
-    def debug(self):
-        print(f"{'-'*10}PASSED PARSING STAGE{'-'*10}")
-        print("TREE:")
-        print(self)
+    def debug(self, tree_file='tree_debug.txt'):
+        print(f'{"-"*10}PASSED PARSING STAGE{"-"*10}')
+        print(f'TREE: in {tree_file}')
+        with open('tree_debug.txt', mode='w+') as file:
+            file.write(str(self))
+            file.close()
     
     def __repr__(self) -> str:
         self.str_tree([self.ast_head])
@@ -652,8 +547,7 @@ class parser:
                 self.print_tree(edge, tab+1, False)
 
     def error(self, symbol, val):
-        print(f"Parsing error: no operation for the symbol {symbol} '{val}'")
-        exit(-1)
+        parser_std_error(f'no operation for the symbol {symbol} \'{val}\'')
     
     def reduce(self, rule):
         prod = self.lr_0_grammar_rules[rule]
@@ -682,11 +576,9 @@ class parser:
                 self.state_stack.append(next_state)
                 pass
             else: 
-                print("Parsing error in goto function: called goto function while not applicable.")
-                exit(-1)
+                parser_std_error(f'in goto function: called goto function while not applicable.')
         else:
-            print("Parsing error: terminal called on goto.")
-            exit(-1)
+            parser_std_error(f'terminal \'{non_terminal}\' called on goto.')
 
     def shift(self, next_state, element):
         ss, ps, pt = self.state_stack, self.productions_stack, self.ast

@@ -1182,13 +1182,3 @@ class codegen:
         self.scope_stack[-1][var_name] = [var_type, has_been_allocated, stack_pointer_offset, is_argument]
         self.add_space_to_scope(var_type) # registering space used so far.
 
-
-s = scanner('./src_code.decaf', './decaf_scanner/tokens'    , build=1, save=0)
-l = lr_0('<program>'          , './decaf_parser/productions', build=1, save=0)
-t = lr_0_t(l)
-p = parser(t, s)
-with open('tree_debug.txt', mode='w+') as file:
-    file.write(str(p))
-    file.close()
-sem = semantic(p)
-c = codegen(sem)
