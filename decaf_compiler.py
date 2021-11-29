@@ -15,8 +15,8 @@ PARSER_STARTING_PRODUCTION = '<program>'
 PARSER_PRODUCTIONS_FILENAME = './decaf_parser/productions'
 
 if __name__ == '__main__':
-    cla = {'source_code': 'src_code.decaf', 'o': 'decaf_program', 'target': 'scanner', 'debug': True} # decaf_cli()
-    target, target_index = cla[TARGET_STAGE], 0
+    cla = decaf_cli()# {'source_code': 'src_code.decaf', 'o': 'decaf_program', 'target': None, 'debug': True}
+    target, target_index = STAGES[cla[TARGET_STAGE]], 0
     debug = cla[DEBUG]
     executable_name = 'a'
     if cla[RENAME_EXECUTABLE]:
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     scanner_instance = parser_instance = semantic_instance = codegen_instance = None
     if target_index != target:
         scanner_instance = scanner(source_code, SCANNER_TOKEN_FILENAME_WO_EXT, build=1, save=1)
-        if debug:
+        if debug: 
             scanner_instance.debug()
         target_index += 1
     if target_index != target:
@@ -44,4 +44,4 @@ if __name__ == '__main__':
         codegen_instance = codegen(semantic_instance, executable_filename=executable_name)
         if debug:
             codegen_instance.debug()
-    intended_print(f"\nCompiled Successfully to ./{executable_name}.asm consult decaf_debug/codegen_debug.asm for commented and formated file.")
+        intended_print(f"\nCompiled Successfully to ./{executable_name}.asm consult decaf_debug/codegen_debug.asm for commented and formated file.")

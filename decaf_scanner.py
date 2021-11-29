@@ -436,7 +436,7 @@ class scanner:
         intended_print(f'\tLINKED LIST OF TOKENS IN {scan_file}')
         with open(scan_file, mode='w+', encoding='utf8') as file:
             for k,v in self.linked_list_of_tokens:
-                file.write(f'{k} {v}')
+                file.write(f'{k} {v}\n')
             file.close()
     
     def produce_automata(self):
@@ -536,17 +536,16 @@ class scanner:
                 while (self.content_index < len(self.content)):
                     char = self.content[self.content_index]
                     buffer += char
-                    if (char == terminal):
-                        double_quote_detected = False
-                        break
-                    elif (char == '\\'):
+                    if (char == '\\'):
                         self.content_index += 1
                         char = self.content[self.content_index]
-                        if (char in 'nt'):   
-                            buffer = buffer[:-1]
-                            buffer += f'\\{char}'
+                        if (char not in 'nt'):
+                            buffer += f'{char}'
                         else:
                             buffer += char
+                    elif (char == terminal):
+                        double_quote_detected = False
+                        break
                     self.content_index += 1
                     self.char_num += 1
                 if (double_quote_detected):
@@ -568,25 +567,25 @@ class scanner:
 
 class error_msg:
     def illegal_character(self, scanner_instance:scanner):
-        scanning_std_error('illegal_character\n\t\
+        scanning_std_error(f'illegal_character\n\t\
             ILLEGAL CHARACTER FOUND \'{scanner_instance.content[scanner_instance.content_index]}\'\n\t\
             illegal character found at line {scanner_instance.line_num} column {scanner_instance.char_num}'
         )
     
     def no_regex_match(self, scanner_instance):
-        scanning_std_error('no_regex_match\n\t\
+        scanning_std_error(f'no_regex_match\n\t\
             NO KEYWORD MATCH FOR \'{scanner_instance.content[scanner_instance.content_index]}\'\n\t\
             No match was found for the above char in line {scanner_instance.line_num} column {scanner_instance.char_num}'
         )
 
     def unmatching_doublequotes(self, scanner_instance):
-        scanning_std_error('unmatching_doublequotes\n\t\
+        scanning_std_error(f'unmatching_doublequotes\n\t\
             FILE TERMINATED WITHOUT CLOSING STRING \'{scanner_instance.content[scanner_instance.content_index]}\'\n\t\
             No double quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}'
         )
     
     def unmatching_singlequotes(self, scanner_instance):
-        scanning_std_error('unmatching_singlequotes\n\t\
+        scanning_std_error(f'unmatching_singlequotes\n\t\
             FILE TERMINATED WITHOUT CLOSING CHAR LITERAL \'{scanner_instance.content[scanner_instance.content_index]}\'\n\t\
             "No single quote to close, above char in line {scanner_instance.line_num} column {scanner_instance.char_num}'
         )

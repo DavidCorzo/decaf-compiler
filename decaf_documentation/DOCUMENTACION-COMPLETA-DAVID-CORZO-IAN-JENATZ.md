@@ -283,5 +283,5 @@ method_name_gen
 ## COMMAND LINE INTERFASE
 El command line interfase se usa de la siguiente manera:
 ```
-python <archivo.py> --target <stage> --debug <stage --o <new_name>
+python <archivo.py> <source_code_file_name> --target <stage> --debug --o <new_name>
 ```

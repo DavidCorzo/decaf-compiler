@@ -1,2 +1,0 @@
-EXPRESSION RETURNS: 
-{32: 'int', 39: 'int', 46: 'int', 48: 'boolean', 59: 'int', 71: 'int', 79: 'int', 81: 'int', 88: 'int', 90: 'boolean'}

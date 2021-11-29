@@ -10,6 +10,7 @@ DEBUG = False
 mem_space = {'int':4, 'boolean': 1, 'class': 0, 'void': 0}
 VAR_TYPE, IS_ALLOCATED, SP_OFFSET, IS_ARGUMENT, ARG_NUM = 0, 1, 2, 3, 4
 
+
 CALLEE_BEGINING, CALLEE_ENDING = 0, 1
 CALLEE_OFFSET = 40
 MAIN_TAG = 'main'
@@ -33,7 +34,7 @@ def tag_gen_for_dot_data():
         yield f'D_{i}'
         i += 1
 IF, CALLEE_ENDER_TAG, FOR = 'if', 'callee_ender', 'for'
-tags_generator = {
+tags_generator = { 
     '=='                : tag_gen_with_name(['eq_false', 'eq_fin']),
     '!='                : tag_gen_with_name(['neq_false', 'neq_fin']),
     '<'                 : tag_gen_with_name(['lt_false', 'lt_fin']),
@@ -42,7 +43,7 @@ tags_generator = {
     '>='                : tag_gen_with_name(['bte_false', 'bte_fin']),
     '&&'                : tag_gen_with_name(['and_false', 'and_fin']),
     '||'                : tag_gen_with_name(['or_true', 'or_fin']),
-    IF                  : tag_gen_with_name(['if_false']),
+    IF                  : tag_gen_with_name(['b_if', 'e_if', 'else']),
     CALLEE_ENDER_TAG    : tag_gen_with_name(['calle_ender']),
     FOR                 : tag_gen_with_name(['for_begin', 'for_end'])
 }
@@ -106,11 +107,12 @@ class codegen:
         self.main_section               = list()
         """IF THE FUNCTION TAKES IN NO ARGUMENTS THEN IT WILL NOT APPEAR IN THE METHOD_ARGUMENTS DICTIONARY """
         self.method_arguments           = dict()
+        self.arg_space_alloc            = 0
         self.arg_num                    = 0
         self.method_return_types        = dict()
         self.callee_actions_performed   = dict()
         self.stack_ptr                  = 0
-        self.var_type                   = None
+        self.var_type                   = None 
         self.current_method             = 'main'
         self.method_offset              = 0
         self.field_decl_offset          = 0
@@ -158,7 +160,7 @@ class codegen:
     def get_pseudo_terminal_value(self, id_ptr):
         return self.ast[self.ast[id_ptr][PTR]][PARENT]
 
-    def get_subscript_val(self, subs_ptr):
+    def get_subscript_val(self, subs_ptr): 
         """CAN BE NULL"""
         if self.ast[subs_ptr][PTR] != None:
             SQUARE_BRACE_LEFT_POS, INT_LITERAL_POS, SQUARE_BRACE_RIGHT_POS = 0, 1, 2
@@ -187,7 +189,7 @@ class codegen:
         self.scope_stack.append({})
         self.scope_space[len(self.scope_stack)-1] = 0
         # main_section starting
-        self.main_section += [instruction(f'{MAIN_TAG}:', 0)]
+        self.main_section += [instruction(f'{MAIN_TAG}:', 0)] 
         self.callee_header_main()
         self.assembler_sections.append([])
         self.traverse([self.ast_head])
@@ -334,22 +336,29 @@ class codegen:
             # '<expr>'
             expr_children = self.ast[children[EXPR_POS]][CHILDREN]
             expr_reg = self.expr(expr_children)
-            if_false_tag = next(tags_generator[IF])
+            b_if_tag, e_if_tag, else_tag = next(tags_generator[IF])
             self.append_instructions(self.current_method, [
                 instruction(f'# if {expr_reg} ?'),
-                instruction(f'beq {expr_reg} $zero {if_false_tag}'),
+                instruction(f'beq {expr_reg} $zero {else_tag}'),
             ])
             unoccupy_temp_reg(expr_reg)
             # '<block>'
             block_children = self.ast[children[BLOCK_POS]][CHILDREN]
             self.block(block_children)
+            self.append_instructions(self.current_method, [
+                instruction(f'j {e_if_tag} # jump to end if')
+            ])
             # '<else_block>'
             self.append_instructions(self.current_method, [
                 instruction(f'# else or end_if'),
-                instruction(f'{if_false_tag}:')
+                instruction(f'{else_tag}:')
             ])
             else_block_children = self.ast[children[ELSE_BLOCK_POS]][CHILDREN]
             self.else_block(else_block_children)
+            self.append_instructions(self.current_method, [
+                instruction(f'j {e_if_tag} # jump to end if'),
+                instruction(f'{e_if_tag}:')
+            ])
             
         elif (productions == ['for', '(', '<assignment_statement>', '<expr>', ';', '<assignment_statement>', ')', '<block>']):
             FOR_POS, INIT_ASSIGNMENT_STATEMENT_POS, BREAK_EXPR_POS, UPDATE_ASSIGNMENT_STATEMENT_POS, FOR_BLOCK_POS = 0, 2, 3, 5, 7
@@ -414,6 +423,7 @@ class codegen:
             EXPR_POS = 0
             expr_children = self.ast[children[EXPR_POS]][CHILDREN]
             expr_reg = self.expr(expr_children)
+            unoccupy_temp_reg(expr_reg)
         elif (productions == ['<print_var>', ';']):
             PRINT_VAR_POS = 0
             print_var_children = self.ast[children[PRINT_VAR_POS]][CHILDREN]
@@ -489,7 +499,7 @@ class codegen:
             ID_POS, COMMA_EXPR_POS = 0, 2
             # no allocation of the arguments
             method_name = method_name_gen(self.get_pseudo_terminal_value(children[ID_POS]))
-            arg_space_alloc = sum([mem_space[x[VAR_TYPE]] for x in self.method_arguments[method_name].values()])
+            self.arg_space_alloc = sum([mem_space[x[VAR_TYPE]] for x in self.method_arguments[method_name].values()])
             arg_names = '# '+''.join([f'{arg_attr[VAR_TYPE]} {arg_name} {arg_attr[SP_OFFSET]}($sp) ' for arg_name, arg_attr in self.method_arguments[method_name].items()])
             self.append_instructions(self.current_method, [
                 instruction(f'# begin method_call to {method_name}'),
@@ -502,14 +512,14 @@ class codegen:
                 instruction(f'move $t6 $s6'),
                 instruction(f'move $t7 $s7'),
                 instruction(f'# arguments {arg_names} alloc'),
-                instruction(f'addi $sp $sp -{arg_space_alloc}')
+                instruction(f'addi $sp $sp -{self.arg_space_alloc}')
             ])
             comma_expr_children = self.ast[children[COMMA_EXPR_POS]][CHILDREN]
             self.comma_expr(comma_expr_children, method_name, 0)
             self.append_instructions(self.current_method, [
                 instruction(f'jal {method_name}'),
                 instruction(f'# arguments {arg_names} dealloc'),
-                instruction(f'addi $sp $sp {arg_space_alloc}'),
+                instruction(f'addi $sp $sp {self.arg_space_alloc}'),
                 instruction(f'move $s0 $t0'),
                 instruction(f'move $s1 $t1'),
                 instruction(f'move $s2 $t2'),
@@ -520,6 +530,7 @@ class codegen:
                 instruction(f'move $s7 $t7'),
                 instruction(f'# end of method_call to {method_name}'),
             ])
+            self.arg_space_alloc = 0
         elif (productions == ['callout', '(', '<string_literal>',  ')']):
             # no se que es esto
             pass
@@ -627,7 +638,7 @@ class codegen:
             assign_op = self.ast[self.ast[children[ASSIGN_OP_POS]][CHILDREN][0]][PARENT]
             expr_children = self.ast[children[EXPR_POS]][CHILDREN]
             expr_reg = self.expr(expr_children)
-            if assign_op == '%assign%':
+            if assign_op == '%assign%': 
                 load_operation = 'lw' if var_attr[VAR_TYPE] == 'int' else 'lb'
                 store_operation = 'sw' if var_attr[VAR_TYPE] == 'int' else 'sb'
                 temp = occupy_temp_reg()
@@ -638,7 +649,7 @@ class codegen:
                 unoccupy_temp_reg(temp)
                 unoccupy_temp_reg(expr_reg)
 
-            elif assign_op == '%assign_inc%':
+            elif assign_op == '%assign_inc%': 
                 load_operation = 'lw' if var_attr[VAR_TYPE] == 'int' else 'lb'
                 store_operation = 'sw' if var_attr[VAR_TYPE] == 'int' else 'sb'
                 temp = occupy_temp_reg()
@@ -650,7 +661,7 @@ class codegen:
                 ])
                 unoccupy_temp_reg(temp)
                 unoccupy_temp_reg(expr_reg)
-            elif assign_op == '%assign_dec%':
+            elif assign_op == '%assign_dec%': 
                 load_operation = 'lw' if var_attr[VAR_TYPE] == 'int' else 'lb'
                 store_operation = 'sw' if var_attr[VAR_TYPE] == 'int' else 'sb'
                 temp = occupy_temp_reg()
@@ -681,6 +692,7 @@ class codegen:
             offset = self.method_arguments[self.current_method][var_name][SP_OFFSET]
             offset += CALLEE_OFFSET
             offset += self.scope_space[len(self.scope_stack)-1]
+            offset += self.arg_space_alloc
             t = (self.method_arguments[self.current_method][var_name], offset)
             return t
         codegen_std_error(f'variable name "{var_name}" was not found in scope')
@@ -1004,15 +1016,15 @@ class codegen:
             instruction(f'{self.tag_calle_ender}:'),
             # return has already been assigned to $v0
             instruction(f'lw $fp 0($sp)') , # recover $fp
-            instruction(f'sw $ra 4($sp)') , # recover $ra
-            instruction(f'sw $s0 8($sp)') , # recover $s0
-            instruction(f'sw $s1 12($sp)'), # recover $s1
-            instruction(f'sw $s2 16($sp)'), # recover $s2
-            instruction(f'sw $s3 20($sp)'), # recover $s3
-            instruction(f'sw $s4 24($sp)'), # recover $s4
-            instruction(f'sw $s5 28($sp)'), # recover $s5
-            instruction(f'sw $s6 32($sp)'), # recover $s6
-            instruction(f'sw $s7 36($sp)'), # recover $s7
+            instruction(f'lw $ra 4($sp)') , # recover $ra
+            instruction(f'lw $s0 8($sp)') , # recover $s0
+            instruction(f'lw $s1 12($sp)'), # recover $s1
+            instruction(f'lw $s2 16($sp)'), # recover $s2
+            instruction(f'lw $s3 20($sp)'), # recover $s3
+            instruction(f'lw $s4 24($sp)'), # recover $s4
+            instruction(f'lw $s5 28($sp)'), # recover $s5
+            instruction(f'lw $s6 32($sp)'), # recover $s6
+            instruction(f'lw $s7 36($sp)'), # recover $s7
             instruction(f'move $sp $fp')  , # restore $sp = $fp this is the dealloc
             # instruction(f'jr $ra'), # this or end?
             instruction(f'# End Program'),
@@ -1037,15 +1049,15 @@ class codegen:
             instruction(f'# begin callee ender'),
             instruction(f'{self.tag_calle_ender}:'),
             instruction(f'lw $fp 0($sp)') , # recover $fp
-            instruction(f'sw $ra 4($sp)') , # recover $ra
-            instruction(f'sw $s0 8($sp)') , # recover $s0
-            instruction(f'sw $s1 12($sp)'), # recover $s1
-            instruction(f'sw $s2 16($sp)'), # recover $s2
-            instruction(f'sw $s3 20($sp)'), # recover $s3
-            instruction(f'sw $s4 24($sp)'), # recover $s4
-            instruction(f'sw $s5 28($sp)'), # recover $s5
-            instruction(f'sw $s6 32($sp)'), # recover $s6
-            instruction(f'sw $s7 36($sp)'), # recover $s7
+            instruction(f'lw $ra 4($sp)') , # recover $ra
+            instruction(f'lw $s0 8($sp)') , # recover $s0
+            instruction(f'lw $s1 12($sp)'), # recover $s1
+            instruction(f'lw $s2 16($sp)'), # recover $s2
+            instruction(f'lw $s3 20($sp)'), # recover $s3
+            instruction(f'lw $s4 24($sp)'), # recover $s4
+            instruction(f'lw $s5 28($sp)'), # recover $s5
+            instruction(f'lw $s6 32($sp)'), # recover $s6
+            instruction(f'lw $s7 36($sp)'), # recover $s7
             instruction(f'move $sp $fp')  , # restore $sp = $fp this is the dealloc
             instruction(f'jr $ra'),
             instruction(f'# end callee ender'),

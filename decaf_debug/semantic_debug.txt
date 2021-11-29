@@ -1,2 +1,2 @@
 EXPRESSION RETURNS: 
-{43: 'int', 51: 'int', 53: 'int', 106: 'int', 147: 'int', 154: 'int', 161: 'int', 163: 'boolean', 174: 'int', 186: 'int', 194: 'int', 196: 'int', 203: 'int', 205: 'boolean', 253: 'int', 259: 'int', 267: 'int', 269: 'int', 274: 'int'}
+{40: 'int', 47: 'int', 54: 'int', 56: 'boolean', 67: 'int', 79: 'int', 87: 'int', 89: 'int', 96: 'int', 98: 'boolean', 184: 'int', 192: 'int', 194: 'int', 253: 'int', 261: 'int', 263: 'int', 322: 'int', 330: 'int', 332: 'int', 391: 'int', 399: 'int', 401: 'int'}

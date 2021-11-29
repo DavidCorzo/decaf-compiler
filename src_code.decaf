@@ -1,23 +1,66 @@
+# FORS, IFS, PRINT, EXPR
 class Program {
-    def int sum(int num1, int num2, int num3) {
-        num1 = (num1 + num2);
-        print_var(num1);
-        print_str("\n");
-        print_var(num2);
-        print_str("\n");
-        print_var(num3);
-        return 0;
-    }
-    
     def void main() {
         int i;
+        int j;
+        # FOR
         for (i = 0; (i < 10); i += 1;) {
+            # IF
             if ((i % 2) == 0) {
                 print_var(i);
                 print_str("\n");
             }
+            # ELSE
+            else {
+                print_str("Odd\n");
+            }
         }
+        print_str("i=");
+        print_var(i);
+        print_str(" -> i*i -> ");
+        j = (i*i); # MULTIPLICACION
+        print_var(j);
         print_str("\n");
-        sum(56, (56*2), 7);
+
+        print_str("j=");
+        print_var(j);
+        print_str(" -> (j / 8) -> ");
+        j = (j / 8); # DIVISION
+        print_var(j);
+        print_str("\n");
+
+        print_str("j=");
+        print_var(j);
+        print_str(" -> (j + 3) -> \n");
+        j = (j + 3); # SUMA
+        print_var(j);
+        print_str("\n");
+
+        print_str("j=");
+        print_var(j);
+        print_str(" -> (j - 30) -> \n");
+        j = (j - 30); # RESTA
+        print_var(j);
+        print_str("\n");
     }
 }
+
+
+# RECURSION
+# class Program {
+#     def int sum(int num1) {
+#         if (num1 == 0) {
+#             print_str("arrived at base case\n");
+#             return;
+#         }
+#         print_str("recursive call: ");
+#         print_var(num1);
+#         print_str("\n");
+#         num1 = (num1 - 1);
+#         sum(num1);
+#     }
+#     
+#     def void main() {
+#         sum(5);
+#     }
+# }
