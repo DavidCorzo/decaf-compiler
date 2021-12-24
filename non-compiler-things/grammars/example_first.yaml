@@ -1,0 +1,29 @@
+# TEST_1:
+# <S´>: !!set {a, b, c}
+# <S> : !!set {a, b, c}
+# <A> : !!set {a, null}
+# <B> : !!set {b, null}
+# <C> : !!set {c}
+# <D> : !!set {d, null}
+# <E> : !!set {e, null}
+
+# TEST_2:
+# <S´>: !!set {a, b, c, d}
+# <S> : !!set {a, b, c, d}
+# <B> : !!set {a, null}
+# <C> : !!set {c, null}
+
+# TEST_3:
+# <S´>: !!set {id, (}
+# <E> : !!set {id, (}
+# <E´>: !!set {+, null}
+# <T> : !!set {id, (}
+# <T´>: !!set {'*', null}
+# <F> : !!set {id, (}
+
+# TEST_4:
+# <S´>: !!set {d, g, h, b, a}
+# <S> : !!set {d, g, h, null, b, a}
+# <A> : !!set {d, g, h, null}
+# <B> : !!set {g, null}
+# <C> : !!set {h, null}

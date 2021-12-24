@@ -1,0 +1,33 @@
+# TEST 1
+# <P>: 
+#   - ['<E>', '$']
+# <E>: 
+#   - ['<T>', '<E´>']
+# <E´>: 
+#   - ['+', '<T>', '<E´>']
+#   - [null]
+# <T>:
+#   - ['<F>', '<T´>']
+# <T´>: 
+#   - ['*', '<F>', '<T´>']
+#   - [null]
+# <F>: 
+#   - ['(', '<E>', ')']
+#   - ['id']
+
+# class Program {
+#     int a[100], b[67];
+
+#     int add(int x, int y) {
+#         return x + y;
+#     }
+
+#     int main() {
+#         int a;
+#         a = 3;
+#         a += 1;
+#         "this is a string???";
+#         'c';
+#         return add(a, 2);
+#     }
+# }

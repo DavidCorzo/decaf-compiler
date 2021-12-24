@@ -1,0 +1,795 @@
+state=0
+<program> -> • <program"> $
+<program"> -> • class %id% { <field_decl*> <method_decl*> } 
+<program"> -> • class %id% { <field_decl*> }
+<program"> -> • class %id% { <method_decl*> }
+<program"> -> • class %id% { }
+{'class': 1, '<program">': 120}
+
+state=1
+<program"> -> class • %id% { <field_decl*> <method_decl*> }
+<program"> -> class • %id% { <field_decl*> }
+<program"> -> class • %id% { <method_decl*> }
+<program"> -> class • %id% { }
+{'%id%': 2}
+
+state=2
+<program"> -> class %id% • { <field_decl*> <method_decl*> }
+<program"> -> class %id% • { <field_decl*> }
+<program"> -> class %id% • { <method_decl*> }
+<program"> -> class %id% • { }
+{'{': 3}
+
+state=3
+<program"> -> class %id% { • <field_decl*> <method_decl*> }
+<program"> -> class %id% { • <field_decl*> }
+<program"> -> class %id% { • <method_decl*> }
+<program"> -> class %id% { • }
+<field_decl*> -> • %type% <field_decl> <field_decl*_aux>
+<method_decl*> -> • def <type|void> %id% ( <method_args> ) <block> <method_decl*_aux>
+<method_decl*> -> • def <type|void> %id% ( ) <block> <method_decl*_aux>
+{'<field_decl*>': 4, '<method_decl*>': 100, 'def': 5, '%type%': 102, '}': 119}
+
+state=4
+<program"> -> class %id% { <field_decl*> • <method_decl*> }
+<program"> -> class %id% { <field_decl*> • }
+<method_decl*> -> • def <type|void> %id% ( <method_args> ) <block> <method_decl*_aux>
+<method_decl*> -> • def <type|void> %id% ( ) <block> <method_decl*_aux>
+{'def': 5, '<method_decl*>': 97, '}': 99}
+
+state=5
+<method_decl*> -> def • <type|void> %id% ( <method_args> ) <block> <method_decl*_aux>
+<method_decl*> -> def • <type|void> %id% ( ) <block> <method_decl*_aux>
+<type|void> -> • %type%
+<type|void> -> • void
+{'<type|void>': 6, '%type%': 95, 'void': 96}
+
+state=6
+<method_decl*> -> def <type|void> • %id% ( <method_args> ) <block> <method_decl*_aux>
+<method_decl*> -> def <type|void> • %id% ( ) <block> <method_decl*_aux>
+{'%id%': 7}
+
+state=7
+<method_decl*> -> def <type|void> %id% • ( <method_args> ) <block> <method_decl*_aux>
+<method_decl*> -> def <type|void> %id% • ( ) <block> <method_decl*_aux>
+{'(': 8}
+
+state=8
+<method_decl*> -> def <type|void> %id% ( • <method_args> ) <block> <method_decl*_aux>
+<method_decl*> -> def <type|void> %id% ( • ) <block> <method_decl*_aux>
+<method_args> -> • %type% %id%
+<method_args> -> • <method_args> <method_args">
+{'<method_args>': 9, '%type%': 90, ')': 92}
+
+state=9
+<method_decl*> -> def <type|void> %id% ( <method_args> • ) <block> <method_decl*_aux>
+<method_args> -> <method_args> • <method_args">
+<method_args"> -> • , %type% %id% <method_args">
+<method_args"> -> •
+{')': 10, '<method_args">': 85, ',': 86}
+
+state=10
+<method_decl*> -> def <type|void> %id% ( <method_args> ) • <block> <method_decl*_aux>
+<block> -> • { <var_decl*> <statement*> }
+{'<block>': 11, '{': 15}
+
+state=11
+<method_decl*> -> • def <type|void> %id% ( <method_args> ) <block> <method_decl*_aux>
+<method_decl*> -> def <type|void> %id% ( <method_args> ) <block> • <method_decl*_aux>
+<method_decl*> -> • def <type|void> %id% ( ) <block> <method_decl*_aux>
+<method_decl*_aux> -> • <method_decl*> <method_decl*_aux>
+<method_decl*_aux> -> •
+{'<method_decl*>': 12, '<method_decl*_aux>': 14, 'def': 5}
+
+state=12
+<method_decl*> -> • def <type|void> %id% ( <method_args> ) <block> <method_decl*_aux>
+<method_decl*> -> • def <type|void> %id% ( ) <block> <method_decl*_aux>
+<method_decl*_aux> -> • <method_decl*> <method_decl*_aux>
+<method_decl*_aux> -> <method_decl*> • <method_decl*_aux>
+<method_decl*_aux> -> •
+{'<method_decl*>': 12, '<method_decl*_aux>': 13, 'def': 5}
+
+state=13
+<method_decl*_aux> -> <method_decl*> <method_decl*_aux> •
+{}
+
+state=14
+<method_decl*> -> def <type|void> %id% ( <method_args> ) <block> <method_decl*_aux> •
+{}
+
+state=15
+<block> -> { • <var_decl*> <statement*> }
+<var_decl*> -> • <var_decl> <var_decl*>
+<var_decl*> -> •
+<var_decl> -> • %type% %id% <args_list> ;
+{'<var_decl>': 16, '<var_decl*>': 25, '%type%': 17}
+
+state=16
+<var_decl*> -> • <var_decl> <var_decl*>
+<var_decl*> -> <var_decl> • <var_decl*>
+<var_decl*> -> •
+<var_decl> -> • %type% %id% <args_list> ;
+{'%type%': 17, '<var_decl>': 16, '<var_decl*>': 24}
+
+state=17
+<var_decl> -> %type% • %id% <args_list> ;
+{'%id%': 18}
+
+state=18
+<var_decl> -> %type% %id% • <args_list> ;
+<args_list> -> • , %id% <args_list>
+<args_list> -> •
+{',': 19, '<args_list>': 22}
+
+state=19
+<args_list> -> , • %id% <args_list>
+{'%id%': 20}
+
+state=20
+<args_list> -> • , %id% <args_list>
+<args_list> -> , %id% • <args_list>
+<args_list> -> •
+{'<args_list>': 21, ',': 19}
+
+state=21
+<args_list> -> , %id% <args_list> •
+{}
+
+state=22
+<var_decl> -> %type% %id% <args_list> • ;
+{';': 23}
+
+state=23
+<var_decl> -> %type% %id% <args_list> ; •
+{}
+
+state=24
+<var_decl*> -> <var_decl> <var_decl*> •
+{}
+
+state=25
+<block> -> • { <var_decl*> <statement*> }
+<block> -> { <var_decl*> • <statement*> }
+<statement*> -> • <statement> <statement*>
+<statement*> -> •
+<statement> -> • <location> %assign_op% <expr> ;
+<statement> -> • <method_call> ;
+<statement> -> • if ( <expr> ) <block> <else_block>
+<statement> -> • return ;
+<statement> -> • return <expr> ;
+<statement> -> • break ;
+<statement> -> • continue ;
+<statement> -> • <block>
+<method_call> -> • %id% ( )
+<method_call> -> • %id% ( <comma_expr> )
+<location> -> • %id%
+<location> -> • %id% [ <expr> ]
+{'%id%': 26, 'continue': 58, '<statement*>': 60, 'break': 62, '<block>': 64, '<statement>': 65, 'return': 67, '{': 15, '<location>': 71, '<method_call>': 75, 'if': 77}
+
+state=26
+<method_call> -> %id% • ( )
+<method_call> -> %id% • ( <comma_expr> )
+<location> -> %id% •
+<location> -> %id% • [ <expr> ]
+{'(': 27, '[': 55}
+
+state=27
+<method_call> -> • %id% ( )
+<method_call> -> %id% ( • )
+<method_call> -> • %id% ( <comma_expr> )
+<method_call> -> %id% ( • <comma_expr> )
+<comma_expr> -> • <expr> <comma_expr">
+<expr> -> • <location>
+<expr> -> • <method_call>
+<expr> -> • <literal>
+<expr> -> • <expr> <bin_op> <expr>
+<expr> -> • - <expr>
+<expr> -> • ! <expr>
+<expr> -> • ( <expr> )
+<location> -> • %id%
+<location> -> • %id% [ <expr> ]
+<literal> -> • %int_literal%
+<literal> -> • %char_literal%
+<literal> -> • %bool_literal%
+{'<literal>': 28, '%char_literal%': 29, '%id%': 26, '%bool_literal%': 30, '<location>': 31, '%int_literal%': 32, '<method_call>': 33, ')': 34, '<expr>': 35, '-': 42, '<comma_expr>': 53, '(': 44, '!': 47}
+
+state=28
+<expr> -> <literal> •
+{}
+
+state=29
+<literal> -> %char_literal% •
+{}
+
+state=30
+<literal> -> %bool_literal% •
+{}
+
+state=31
+<expr> -> <location> •
+{}
+
+state=32
+<literal> -> %int_literal% •
+{}
+
+state=33
+<expr> -> <method_call> •
+{}
+
+state=34
+<method_call> -> %id% ( ) •
+{}
+
+state=35
+<comma_expr> -> <expr> • <comma_expr">
+<comma_expr"> -> • , <expr> <comma_expr">
+<comma_expr"> -> •
+<expr> -> <expr> • <bin_op> <expr>
+<bin_op> -> • %arith_op%
+<bin_op> -> • %rel_op%
+<bin_op> -> • %eq_op%
+<bin_op> -> • %cond_op%
+{'<bin_op>': 36, ',': 49, '%eq_op%': 38, '%rel_op%': 41, '%cond_op%': 39, '%arith_op%': 40, '<comma_expr">': 52}
+
+state=36
+<method_call> -> • %id% ( )
+<method_call> -> • %id% ( <comma_expr> )
+<expr> -> • <location>
+<expr> -> • <method_call>
+<expr> -> • <literal>
+<expr> -> • <expr> <bin_op> <expr>
+<expr> -> <expr> <bin_op> • <expr>
+<expr> -> • - <expr>
+<expr> -> • ! <expr>
+<expr> -> • ( <expr> )
+<location> -> • %id%
+<location> -> • %id% [ <expr> ]
+<literal> -> • %int_literal%
+<literal> -> • %char_literal%
+<literal> -> • %bool_literal%
+{'<literal>': 28, '%char_literal%': 29, '<expr>': 37, '%id%': 26, '%bool_literal%': 30, '<location>': 31, '%int_literal%': 32, '<method_call>': 33, '-': 42, '(': 44, '!': 47}
+
+state=37
+<expr> -> <expr> • <bin_op> <expr>
+<expr> -> <expr> <bin_op> <expr> •
+<bin_op> -> • %arith_op%
+<bin_op> -> • %rel_op%
+<bin_op> -> • %eq_op%
+<bin_op> -> • %cond_op%
+{'<bin_op>': 36, '%eq_op%': 38, '%cond_op%': 39, '%arith_op%': 40, '%rel_op%': 41}
+
+state=38
+<bin_op> -> %eq_op% •
+{}
+
+state=39
+<bin_op> -> %cond_op% •
+{}
+
+state=40
+<bin_op> -> %arith_op% •
+{}
+
+state=41
+<bin_op> -> %rel_op% •
+{}
+
+state=42
+<method_call> -> • %id% ( )
+<method_call> -> • %id% ( <comma_expr> )
+<expr> -> • <location>
+<expr> -> • <method_call>
+<expr> -> • <literal>
+<expr> -> • <expr> <bin_op> <expr>
+<expr> -> • - <expr>
+<expr> -> - • <expr>
+<expr> -> • ! <expr>
+<expr> -> • ( <expr> )
+<location> -> • %id%
+<location> -> • %id% [ <expr> ]
+<literal> -> • %int_literal%
+<literal> -> • %char_literal%
+<literal> -> • %bool_literal%
+{'<literal>': 28, '%char_literal%': 29, '%id%': 26, '%bool_literal%': 30, '<location>': 31, '%int_literal%': 32, '<method_call>': 33, '<expr>': 43, '-': 42, '(': 44, '!': 47}
+
+state=43
+<expr> -> <expr> • <bin_op> <expr>
+<expr> -> - <expr> •
+<bin_op> -> • %arith_op%
+<bin_op> -> • %rel_op%
+<bin_op> -> • %eq_op%
+<bin_op> -> • %cond_op%
+{'<bin_op>': 36, '%eq_op%': 38, '%cond_op%': 39, '%arith_op%': 40, '%rel_op%': 41}
+
+state=44
+<method_call> -> • %id% ( )
+<method_call> -> • %id% ( <comma_expr> )
+<expr> -> • <location>
+<expr> -> • <method_call>
+<expr> -> • <literal>
+<expr> -> • <expr> <bin_op> <expr>
+<expr> -> • - <expr>
+<expr> -> • ! <expr>
+<expr> -> • ( <expr> )
+<expr> -> ( • <expr> )
+<location> -> • %id%
+<location> -> • %id% [ <expr> ]
+<literal> -> • %int_literal%
+<literal> -> • %char_literal%
+<literal> -> • %bool_literal%
+{'<literal>': 28, '%char_literal%': 29, '%id%': 26, '<expr>': 45, '%bool_literal%': 30, '<location>': 31, '%int_literal%': 32, '<method_call>': 33, '-': 42, '(': 44, '!': 47}
+
+state=45
+<expr> -> <expr> • <bin_op> <expr>
+<expr> -> ( <expr> • )
+<bin_op> -> • %arith_op%
+<bin_op> -> • %rel_op%
+<bin_op> -> • %eq_op%
+<bin_op> -> • %cond_op%
+{'<bin_op>': 36, ')': 46, '%eq_op%': 38, '%cond_op%': 39, '%arith_op%': 40, '%rel_op%': 41}
+
+state=46
+<expr> -> ( <expr> ) •
+{}
+
+state=47
+<method_call> -> • %id% ( )
+<method_call> -> • %id% ( <comma_expr> )
+<expr> -> • <location>
+<expr> -> • <method_call>
+<expr> -> • <literal>
+<expr> -> • <expr> <bin_op> <expr>
+<expr> -> • - <expr>
+<expr> -> • ! <expr>
+<expr> -> ! • <expr>
+<expr> -> • ( <expr> )
+<location> -> • %id%
+<location> -> • %id% [ <expr> ]
+<literal> -> • %int_literal%
+<literal> -> • %char_literal%
+<literal> -> • %bool_literal%
+{'<literal>': 28, '%char_literal%': 29, '%id%': 26, '%bool_literal%': 30, '<location>': 31, '%int_literal%': 32, '<method_call>': 33, '<expr>': 48, '-': 42, '(': 44, '!': 47}
+
+state=48
+<expr> -> <expr> • <bin_op> <expr>
+<expr> -> ! <expr> •
+<bin_op> -> • %arith_op%
+<bin_op> -> • %rel_op%
+<bin_op> -> • %eq_op%
+<bin_op> -> • %cond_op%
+{'<bin_op>': 36, '%eq_op%': 38, '%cond_op%': 39, '%arith_op%': 40, '%rel_op%': 41}
+
+state=49
+<method_call> -> • %id% ( )
+<method_call> -> • %id% ( <comma_expr> )
+<comma_expr"> -> , • <expr> <comma_expr"> 
+<expr> -> • <location>
+<expr> -> • <method_call>
+<expr> -> • <literal>
+<expr> -> • <expr> <bin_op> <expr>
+<expr> -> • - <expr>
+<expr> -> • ! <expr>
+<expr> -> • ( <expr> )
+<location> -> • %id%
+<location> -> • %id% [ <expr> ]
+<literal> -> • %int_literal%
+<literal> -> • %char_literal%
+<literal> -> • %bool_literal%
+{'<literal>': 28, '%char_literal%': 29, '%id%': 26, '%bool_literal%': 30, '<expr>': 50, '<location>': 31, '%int_literal%': 32, '<method_call>': 33, '-': 42, '(': 44, '!': 47}
+
+state=50
+<comma_expr"> -> • , <expr> <comma_expr">
+<comma_expr"> -> , <expr> • <comma_expr">
+<comma_expr"> -> •
+<expr> -> <expr> • <bin_op> <expr>
+<bin_op> -> • %arith_op%
+<bin_op> -> • %rel_op%
+<bin_op> -> • %eq_op%
+<bin_op> -> • %cond_op%
+{'<bin_op>': 36, ',': 49, '%eq_op%': 38, '<comma_expr">': 51, '%cond_op%': 39, '%arith_op%': 40, '%rel_op%': 41}
+
+state=51
+<comma_expr"> -> , <expr> <comma_expr"> •
+{}
+
+state=52
+<comma_expr> -> <expr> <comma_expr"> •
+{}
+
+state=53
+<method_call> -> %id% ( <comma_expr> • )
+{')': 54}
+
+state=54
+<method_call> -> %id% ( <comma_expr> ) •
+{}
+
+state=55
+<method_call> -> • %id% ( )
+<method_call> -> • %id% ( <comma_expr> )
+<expr> -> • <location>
+<expr> -> • <method_call>
+<expr> -> • <literal>
+<expr> -> • <expr> <bin_op> <expr>
+<expr> -> • - <expr>
+<expr> -> • ! <expr>
+<expr> -> • ( <expr> )
+<location> -> • %id%
+<location> -> • %id% [ <expr> ]
+<location> -> %id% [ • <expr> ]
+<literal> -> • %int_literal%
+<literal> -> • %char_literal%
+<literal> -> • %bool_literal%
+{'<literal>': 28, '<expr>': 56, '%char_literal%': 29, '%id%': 26, '%bool_literal%': 30, '<location>': 31, '%int_literal%': 32, '<method_call>': 33, '-': 42, '(': 44, '!': 47}
+
+state=56
+<expr> -> <expr> • <bin_op> <expr>
+<location> -> %id% [ <expr> • ]
+<bin_op> -> • %arith_op%
+<bin_op> -> • %rel_op%
+<bin_op> -> • %eq_op%
+<bin_op> -> • %cond_op%
+{'<bin_op>': 36, ']': 57, '%eq_op%': 38, '%cond_op%': 39, '%arith_op%': 40, '%rel_op%': 41}
+
+state=57
+<location> -> %id% [ <expr> ] •
+{}
+
+state=58
+<statement> -> continue • ;
+{';': 59}
+
+state=59
+<statement> -> continue ; •
+{}
+
+state=60
+<block> -> { <var_decl*> <statement*> • }
+{'}': 61}
+
+state=61
+<block> -> { <var_decl*> <statement*> } •
+{}
+
+state=62
+<statement> -> break • ;
+{';': 63}
+
+state=63
+<statement> -> break ; •
+{}
+
+state=64
+<statement> -> <block> •
+{}
+
+state=65
+<block> -> • { <var_decl*> <statement*> }
+<statement*> -> • <statement> <statement*>
+<statement*> -> <statement> • <statement*>
+<statement*> -> •
+<statement> -> • <location> %assign_op% <expr> ;
+<statement> -> • <method_call> ;
+<statement> -> • if ( <expr> ) <block> <else_block>
+<statement> -> • return ;
+<statement> -> • return <expr> ;
+<statement> -> • break ;
+<statement> -> • continue ;
+<statement> -> • <block>
+<method_call> -> • %id% ( )
+<method_call> -> • %id% ( <comma_expr> )
+<location> -> • %id%
+<location> -> • %id% [ <expr> ]
+{'%id%': 26, 'continue': 58, 'break': 62, '<block>': 64, '<statement*>': 66, '<statement>': 65, 'return': 67, '{': 15, '<location>': 71, '<method_call>': 75, 'if': 77}
+
+state=66
+<statement*> -> <statement> <statement*> •
+{}
+
+state=67
+<statement> -> return • ;
+<statement> -> return • <expr> ;
+<method_call> -> • %id% ( )
+<method_call> -> • %id% ( <comma_expr> )
+<expr> -> • <location>
+<expr> -> • <method_call>
+<expr> -> • <literal>
+<expr> -> • <expr> <bin_op> <expr>
+<expr> -> • - <expr>
+<expr> -> • ! <expr>
+<expr> -> • ( <expr> )
+<location> -> • %id%
+<location> -> • %id% [ <expr> ]
+<literal> -> • %int_literal%
+<literal> -> • %char_literal%
+<literal> -> • %bool_literal%
+{'<literal>': 28, '%char_literal%': 29, '%id%': 26, '%bool_literal%': 30, '<location>': 31, '%int_literal%': 32, '<method_call>': 33, '<expr>': 68, ';': 70, '-': 42, '(': 44, '!': 47}
+
+state=68
+<statement> -> return <expr> • ;
+<expr> -> <expr> • <bin_op> <expr>
+<bin_op> -> • %arith_op%
+<bin_op> -> • %rel_op%
+<bin_op> -> • %eq_op%
+<bin_op> -> • %cond_op%
+{'<bin_op>': 36, '%eq_op%': 38, '%cond_op%': 39, '%arith_op%': 40, '%rel_op%': 41, ';': 69}
+
+state=69
+<statement> -> return <expr> ; •
+{}
+
+state=70
+<statement> -> return ; •
+{}
+
+state=71
+<statement> -> <location> • %assign_op% <expr> ;
+{'%assign_op%': 72}
+
+state=72
+<statement> -> <location> %assign_op% • <expr> ;
+<method_call> -> • %id% ( )
+<method_call> -> • %id% ( <comma_expr> )
+<expr> -> • <location>
+<expr> -> • <method_call>
+<expr> -> • <literal>
+<expr> -> • <expr> <bin_op> <expr>
+<expr> -> • - <expr>
+<expr> -> • ! <expr>
+<expr> -> • ( <expr> )
+<location> -> • %id%
+<location> -> • %id% [ <expr> ]
+<literal> -> • %int_literal%
+<literal> -> • %char_literal%
+<literal> -> • %bool_literal%
+{'<literal>': 28, '%char_literal%': 29, '%id%': 26, '%bool_literal%': 30, '<location>': 31, '%int_literal%': 32, '<method_call>': 33, '<expr>': 73, '-': 42, '(': 44, '!': 47}
+
+state=73
+<statement> -> <location> %assign_op% <expr> • ;
+<expr> -> <expr> • <bin_op> <expr>
+<bin_op> -> • %arith_op%
+<bin_op> -> • %rel_op%
+<bin_op> -> • %eq_op%
+<bin_op> -> • %cond_op%
+{'<bin_op>': 36, '%eq_op%': 38, ';': 74, '%cond_op%': 39, '%arith_op%': 40, '%rel_op%': 41}
+
+state=74
+<statement> -> <location> %assign_op% <expr> ; •
+{}
+
+state=75
+<statement> -> <method_call> • ;
+{';': 76}
+
+state=76
+<statement> -> <method_call> ; •
+{}
+
+state=77
+<statement> -> if • ( <expr> ) <block> <else_block>
+{'(': 78}
+
+state=78
+<statement> -> if ( • <expr> ) <block> <else_block>
+<method_call> -> • %id% ( )
+<method_call> -> • %id% ( <comma_expr> )
+<expr> -> • <location>
+<expr> -> • <method_call>
+<expr> -> • <literal>
+<expr> -> • <expr> <bin_op> <expr>
+<expr> -> • - <expr>
+<expr> -> • ! <expr>
+<expr> -> • ( <expr> )
+<location> -> • %id%
+<location> -> • %id% [ <expr> ]
+<literal> -> • %int_literal%
+<literal> -> • %char_literal%
+<literal> -> • %bool_literal%
+{'<literal>': 28, '<expr>': 79, '%char_literal%': 29, '%id%': 26, '%bool_literal%': 30, '<location>': 31, '%int_literal%': 32, '<method_call>': 33, '-': 42, '(': 44, '!': 47}
+
+state=79
+<statement> -> if ( <expr> • ) <block> <else_block>
+<expr> -> <expr> • <bin_op> <expr>
+<bin_op> -> • %arith_op%
+<bin_op> -> • %rel_op%
+<bin_op> -> • %eq_op%
+<bin_op> -> • %cond_op%
+{'<bin_op>': 36, '%eq_op%': 38, ')': 80, '%cond_op%': 39, '%arith_op%': 40, '%rel_op%': 41}
+
+state=80
+<block> -> • { <var_decl*> <statement*> }
+<statement> -> if ( <expr> ) • <block> <else_block>
+{'{': 15, '<block>': 81}
+
+state=81
+<statement> -> if ( <expr> ) <block> • <else_block>
+<else_block> -> • else <block>
+<else_block> -> •
+{'else': 82, '<else_block>': 84}
+
+state=82
+<block> -> • { <var_decl*> <statement*> }
+<else_block> -> else • <block>
+{'<block>': 83, '{': 15}
+
+state=83
+<else_block> -> else <block> •
+{}
+
+state=84
+<statement> -> if ( <expr> ) <block> <else_block> •
+{}
+
+state=85
+<method_args> -> <method_args> <method_args"> •
+{}
+
+state=86
+<method_args"> -> , • %type% %id% <method_args">
+{'%type%': 87}
+
+state=87
+<method_args"> -> , %type% • %id% <method_args">
+{'%id%': 88}
+
+state=88
+<method_args"> -> • , %type% %id% <method_args">
+<method_args"> -> , %type% %id% • <method_args">
+<method_args"> -> •
+{'<method_args">': 89, ',': 86}
+
+state=89
+<method_args"> -> , %type% %id% <method_args"> •
+{}
+
+state=90
+<method_args> -> %type% • %id%
+{'%id%': 91}
+
+state=91
+<method_args> -> %type% %id% •
+{}
+
+state=92
+<method_decl*> -> def <type|void> %id% ( ) • <block> <method_decl*_aux>
+<block> -> • { <var_decl*> <statement*> }
+{'<block>': 93, '{': 15}
+
+state=93
+<method_decl*> -> • def <type|void> %id% ( <method_args> ) <block> <method_decl*_aux>
+<method_decl*> -> • def <type|void> %id% ( ) <block> <method_decl*_aux>
+<method_decl*> -> def <type|void> %id% ( ) <block> • <method_decl*_aux>
+<method_decl*_aux> -> • <method_decl*> <method_decl*_aux>
+<method_decl*_aux> -> •
+{'<method_decl*>': 12, 'def': 5, '<method_decl*_aux>': 94}
+
+state=94
+<method_decl*> -> def <type|void> %id% ( ) <block> <method_decl*_aux> •
+{}
+
+state=95
+<type|void> -> %type% •
+{}
+
+state=96
+<type|void> -> void •
+{}
+
+state=97
+<program"> -> class %id% { <field_decl*> <method_decl*> • }
+{'}': 98}
+
+state=98
+<program"> -> class %id% { <field_decl*> <method_decl*> } •
+{}
+
+state=99
+<program"> -> class %id% { <field_decl*> } •
+{}
+
+state=100
+<program"> -> class %id% { <method_decl*> • }
+{'}': 101}
+
+state=101
+<program"> -> class %id% { <method_decl*> } •
+{}
+
+state=102
+<field_decl*> -> %type% • <field_decl> <field_decl*_aux>
+<field_decl> -> • %id% <subscript> ;
+<field_decl> -> • %id% <subscript> <var_array_list> ;
+{'%id%': 103, '<field_decl>': 115}
+
+state=103
+<field_decl> -> %id% • <subscript> ;
+<field_decl> -> %id% • <subscript> <var_array_list> ;
+<subscript> -> • [ %int_literal% ]
+<subscript> -> •
+{'<subscript>': 104, '[': 112}
+
+state=104
+<field_decl> -> %id% <subscript> • ;
+<field_decl> -> %id% <subscript> • <var_array_list> ;
+<var_array_list> -> • , %id% <subscript> <var_array_list>
+<var_array_list> -> •
+{';': 105, '<var_array_list>': 106, ',': 108}
+
+state=105
+<field_decl> -> %id% <subscript> ; •
+{}
+
+state=106
+<field_decl> -> %id% <subscript> <var_array_list> • ;
+{';': 107}
+
+state=107
+<field_decl> -> %id% <subscript> <var_array_list> ; •
+{}
+
+state=108
+<var_array_list> -> , • %id% <subscript> <var_array_list>
+{'%id%': 109}
+
+state=109
+<var_array_list> -> , %id% • <subscript> <var_array_list>
+<subscript> -> • [ %int_literal% ]
+<subscript> -> •
+{'<subscript>': 110, '[': 112}
+
+state=110
+<var_array_list> -> • , %id% <subscript> <var_array_list>
+<var_array_list> -> , %id% <subscript> • <var_array_list>
+<var_array_list> -> •
+{',': 108, '<var_array_list>': 111}
+
+state=111
+<var_array_list> -> , %id% <subscript> <var_array_list> •
+{}
+
+state=112
+<subscript> -> [ • %int_literal% ]
+{'%int_literal%': 113}
+
+state=113
+<subscript> -> [ %int_literal% • ]
+{']': 114}
+
+state=114
+<subscript> -> [ %int_literal% ] •
+{}
+
+state=115
+<field_decl*> -> • %type% <field_decl> <field_decl*_aux>
+<field_decl*> -> %type% <field_decl> • <field_decl*_aux>
+<field_decl*_aux> -> • <field_decl*> <field_decl*_aux>
+<field_decl*_aux> -> •
+{'<field_decl*>': 116, '<field_decl*_aux>': 118, '%type%': 102}
+
+state=116
+<field_decl*> -> • %type% <field_decl> <field_decl*_aux>
+<field_decl*_aux> -> • <field_decl*> <field_decl*_aux>
+<field_decl*_aux> -> <field_decl*> • <field_decl*_aux>
+<field_decl*_aux> -> •
+{'<field_decl*_aux>': 117, '<field_decl*>': 116, '%type%': 102}
+
+state=117
+<field_decl*_aux> -> <field_decl*> <field_decl*_aux> •
+{}
+
+state=118
+<field_decl*> -> %type% <field_decl> <field_decl*_aux> •
+{}
+
+state=119
+<program"> -> class %id% { } •
+{}
+
+state=120
+<program> -> <program"> • $
+{'$': 121}
+
+state=121
+<program> -> <program"> $ •
+{}
